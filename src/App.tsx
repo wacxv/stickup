@@ -1,50 +1,73 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import { TitleBar } from "./components/TitleBar";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <>
+      {/* Custom borderless title bar */}
+      <TitleBar />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      {/* Main content area — grows to fill remaining window height */}
+      <main className="flex-1 overflow-auto bg-neutral-950 text-neutral-100">
+        {/*
+         * ── Breakpoint smoke-test ──────────────────────────────────────────
+         * Responds to the WINDOW width via the CSS container declared on
+         * #root (container-name: app  /  container-type: inline-size).
+         *
+         * Tailwind v4 named-container variant syntax:
+         *   @[400px]/app:…   →  apply when container "app" ≥ 400 px
+         *
+         * Narrow  < 400 px  →  purple badge
+         * Wide   ≥ 400 px  →  teal badge
+         *
+         * Remove this component once real board UI exists.
+         */}
+        <BreakpointIndicator />
+      </main>
+    </>
+  );
+}
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
+function BreakpointIndicator() {
+  return (
+    <div className="m-4">
+      {/* Outer card: purple in narrow mode, teal in wide mode */}
+      <div
+        className="
+          rounded-lg p-4 transition-colors duration-200
+          bg-purple-900 text-purple-200
+          @[400px]/app:bg-teal-900 @[400px]/app:text-teal-200
+        "
       >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+        {/* Label swaps via visibility utilities on the same container query */}
+        <p className="text-sm font-semibold">
+          {/* Visible only when narrow */}
+          <span className="@[400px]/app:hidden">
+            📐 Narrow layout &lt; 400 px
+          </span>
+          {/* Visible only when wide */}
+          <span className="hidden @[400px]/app:inline">
+            📐 Wide layout ≥ 400 px
+          </span>
+        </p>
+
+        <p className="mt-2 text-xs opacity-60 font-mono">
+          Container query on <code>#root</code> — resize the window to trigger
+        </p>
+
+        {/* Extra padding demo: narrow = p-2, wide = p-6 */}
+        <div
+          className="
+            mt-3 rounded border border-current/20
+            p-2 @[400px]/app:p-6
+            text-xs opacity-70
+          "
+        >
+          This box has <code>p-2</code> when narrow and{" "}
+          <code>p-6</code> when wide.
+        </div>
+      </div>
+    </div>
   );
 }
 

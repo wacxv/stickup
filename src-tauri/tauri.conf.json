@@ -13,8 +13,12 @@
     "windows": [
       {
         "title": "stickup",
-        "width": 800,
-        "height": 600
+        "width": 320,
+        "height": 520,
+        "minWidth": 280,
+        "minHeight": 360,
+        "decorations": false,
+        "transparent": false
       }
     ],
     "security": {
