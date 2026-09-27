@@ -8,6 +8,25 @@
     "opener:default",
     "core:window:allow-hide",
     "core:window:allow-minimize",
-    "core:window:allow-set-always-on-top"
+    "core:window:allow-set-always-on-top",
+    "fs:allow-app-write-recursive",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-meta",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:allow-remove",
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPDATA/boards/*" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$APPDATA/boards/*" }]
+    },
+    "notification:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

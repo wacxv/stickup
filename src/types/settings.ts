@@ -1,6 +1,7 @@
 import type { NotificationMode } from "./task";
 
-export type StartupVisibility = "visible" | "hidden" | "tray";
+/** How the window should appear on launch */
+export type StartupVisibility = "shown" | "hidden";
 
 export interface WindowBounds {
   x: number;
@@ -10,16 +11,16 @@ export interface WindowBounds {
 }
 
 export interface Settings {
-  /** Whether the app registers itself as a login/startup item */
+  /** Register app as a system login/startup item */
   launchAtStartup: boolean;
-  /** Window state when the app launches */
+  /** Window visibility on launch */
   startupVisibility: StartupVisibility;
-  /** Last-known window position and size, persisted across sessions */
+  /** Last-known window position + size; null until first close */
   windowBounds: WindowBounds | null;
-  /** Fallback notification mode applied to new tasks */
+  /** Global fallback notification mode; null = notifications off by default */
   defaultNotificationMode: NotificationMode | null;
-  /** Minutes before a due time to fire the first reminder */
+  /** Minutes before due time to fire the first reminder */
   reminderLeadMinutes: number;
-  /** Interval in minutes between repeated "nag" notifications */
+  /** Minutes between repeated nag notifications */
   nagIntervalMinutes: number;
 }
