@@ -18,6 +18,7 @@ import {
   isDueToday,
   PRIORITY_COLORS,
 } from "../lib/taskHelpers";
+import { PiRepeatBold } from "react-icons/pi";
 
 interface Props {
   task: Task;
@@ -158,7 +159,7 @@ export function TaskRow({
           className="shrink-0 text-neutral-500 text-[10px] select-none"
           aria-label={`Repeats ${task.recurrence}`}
         >
-          ↻
+          <PiRepeatBold />
         </span>
       )}
 
