@@ -142,6 +142,29 @@ body {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 
+/* Tables */
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+  font-size: 0.95em;
+}
+.prose th,
+.prose td {
+  padding: 0.4em 0.75em;
+  border: 1px solid #303030;
+  text-align: left; /* markdown-it's inline alignment styles still win */
+}
+.prose th {
+  background: #1e1e1e;
+  color: #f5f5f5;
+  font-weight: 600;
+}
+.prose tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+
 /* ── highlight.js atom-one-dark-ish token colours ─────────────────────────── */
 .hljs                 { color: #abb2bf; }
 .hljs-comment,
