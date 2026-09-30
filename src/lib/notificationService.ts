@@ -48,9 +48,11 @@ export async function checkNotifications(
     const effectiveMode = resolveMode(task, settings);
     if (!effectiveMode) continue;
 
-    // Due datetime is midnight local on the due date; add reminderLeadMinutes
-    // before that to get the earliest trigger window.
-    const dueDate = new Date(task.due + "T00:00:00");
+    // Due datetime — if the due string has a time part, use it directly;
+    // otherwise fall back to midnight.
+    const dueDate = task.due!.includes("T")
+      ? new Date(task.due!)
+      : new Date(task.due! + "T00:00:00");
     const triggerTime = new Date(
       dueDate.getTime() - settings.reminderLeadMinutes * 60 * 1000,
     );
@@ -58,7 +60,7 @@ export async function checkNotifications(
     // Not yet in notification window
     if (now < triggerTime) continue;
 
-    // Overdue — past the due date itself — stop nagging (spec: nag stops when overdue)
+    // Overdue — past the due datetime — stop nagging (spec: nag stops when overdue)
     if (now > dueDate) continue;
 
     if (effectiveMode === "gentle") {
@@ -110,13 +112,18 @@ async function fire(task: Task): Promise<void> {
 }
 
 function formatDueLabel(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
+  const hasTime = iso.includes("T");
+  const d = hasTime ? new Date(iso) : new Date(iso + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const diff = Math.round(
-    (d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    (dueDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
   );
-  if (diff === 0) return "today";
-  if (diff === 1) return "tomorrow";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const timePart = hasTime
+    ? " at " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : "";
+  if (diff === 0) return "today" + timePart;
+  if (diff === 1) return "tomorrow" + timePart;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + timePart;
 }

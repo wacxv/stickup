@@ -34,7 +34,11 @@ export function getRecurrenceResets(tasks: Task[]): Task[] {
     if (task.recurrence === "none") continue;
     if (!task.due) continue;
 
-    const dueDate = startOfLocalDay(new Date(task.due + "T00:00:00"));
+    const dueDate = startOfLocalDay(
+      task.due.includes("T")
+        ? new Date(task.due)
+        : new Date(task.due + "T00:00:00"),
+    );
 
     // Not yet past due — nothing to reset
     if (dueDate >= today) continue;
@@ -57,8 +61,14 @@ function advanceDue(task: Task, today: Date): Task {
   const now = new Date().toISOString();
   const daysToAdd = task.recurrence === "daily" ? 1 : 7;
 
+  // Parse the time component if present
+  const hasTime = task.due!.includes("T");
+  const timePart = hasTime ? task.due!.split("T")[1] : "";
+
   // Advance from the existing due date (not today) so we don't drift
-  const base = startOfLocalDay(new Date(task.due! + "T00:00:00"));
+  const base = startOfLocalDay(
+    hasTime ? new Date(task.due!) : new Date(task.due! + "T00:00:00"),
+  );
   let next = new Date(base);
 
   // Keep advancing until the next due date is today or in the future
@@ -66,7 +76,10 @@ function advanceDue(task: Task, today: Date): Task {
     next = new Date(next.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
   }
 
-  const nextDue = toISODateString(next);
+  // Rebuild the due string, preserving the time component if it existed
+  const nextDue = hasTime
+    ? toISODateString(next) + "T" + timePart
+    : toISODateString(next);
 
   return {
     ...task,

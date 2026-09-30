@@ -28,29 +28,77 @@ export function makeTask(partial: Partial<Task> & { title: string }): Task {
 
 // ─── Due-date helpers ─────────────────────────────────────────────────────────
 
-/** Format an ISO date string as a short human label ("Today", "Tomorrow", "Oct 3"). */
+/**
+ * Parse a due string that may be date-only ("2026-10-01") or
+ * datetime ("2026-10-01T14:30") into a local Date.
+ */
+export function parseDueDate(iso: string): Date {
+  if (iso.includes("T")) {
+    // Has time component — parse as local datetime
+    return new Date(iso);
+  }
+  // Date-only — local midnight
+  return new Date(iso + "T00:00:00");
+}
+
+/**
+ * Split a due string into { date, time } for use in form inputs.
+ * date = "YYYY-MM-DD", time = "HH:MM" or "".
+ */
+export function splitDue(due: string): { date: string; time: string } {
+  if (due.includes("T")) {
+    const [date, time] = due.split("T");
+    return { date, time };
+  }
+  return { date: due, time: "" };
+}
+
+/**
+ * Join date + time back into a due string.
+ * If time is empty, returns date-only string.
+ */
+export function joinDue(date: string, time: string): string {
+  if (!date) return "";
+  if (!time) return date;
+  return `${date}T${time}`;
+}
+
+/** Format an ISO date string as a short human label ("Today", "Tomorrow", "Oct 3", "Oct 3 2:30 PM"). */
 export function formatDue(iso: string): string {
-  const due = new Date(iso + "T00:00:00"); // local midnight
+  const due = parseDueDate(iso);
   const today = startOfLocalDay(new Date());
+  const dueDay = startOfLocalDay(due);
   const diff = Math.round(
-    (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    (dueDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
   );
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
-  return due.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  const hasTime = iso.includes("T");
+  const timePart = hasTime
+    ? " " + due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : "";
+
+  if (diff === 0) return "Today" + timePart;
+  if (diff === 1) return "Tomorrow" + timePart;
+  if (diff === -1) return "Yesterday" + timePart;
+  return due.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + timePart;
 }
 
 export function isDueToday(iso: string): boolean {
-  const due = new Date(iso + "T00:00:00");
+  const due = startOfLocalDay(parseDueDate(iso));
   const today = startOfLocalDay(new Date());
   return due.getTime() === today.getTime();
 }
 
 export function isOverdue(iso: string): boolean {
-  const due = new Date(iso + "T00:00:00");
-  const today = startOfLocalDay(new Date());
-  return due.getTime() < today.getTime();
+  const due = parseDueDate(iso);
+  const now = new Date();
+  if (iso.includes("T")) {
+    // Datetime — overdue if the exact datetime has passed
+    return due.getTime() < now.getTime();
+  }
+  // Date-only — overdue if the day has passed
+  const today = startOfLocalDay(now);
+  return startOfLocalDay(due).getTime() < today.getTime();
 }
 
 function startOfLocalDay(d: Date): Date {

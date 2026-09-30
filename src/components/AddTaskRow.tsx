@@ -13,6 +13,7 @@ import {
   PRIORITY_LABELS,
   RECURRENCE_LABELS,
   NOTIFICATION_LABELS,
+  joinDue,
 } from "../lib/taskHelpers";
 
 interface Props {
@@ -29,6 +30,7 @@ export function AddTaskRow({ onAdd }: Props) {
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [due, setDue] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [priority, setPriority] = useState<Priority>("standard");
   const [recurrence, setRecurrence] = useState<Recurrence>("none");
   const [notificationMode, setNotificationMode] =
@@ -41,7 +43,7 @@ export function AddTaskRow({ onAdd }: Props) {
     if (!trimmed) return;
     onAdd({
       title: trimmed,
-      due: due || undefined,
+      due: joinDue(due, dueTime) || undefined,
       priority,
       recurrence,
       notificationMode,
@@ -49,6 +51,7 @@ export function AddTaskRow({ onAdd }: Props) {
     // Reset
     setTitle("");
     setDue("");
+    setDueTime("");
     setPriority("standard");
     setRecurrence("none");
     setNotificationMode(null);
@@ -110,11 +113,27 @@ export function AddTaskRow({ onAdd }: Props) {
         <div className="px-3 pb-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
           {/* Due date */}
           <label className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Due</span>
+            <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Due date</span>
             <input
               type="date"
               value={due}
               onChange={(e) => setDue(e.target.value)}
+              className="
+                bg-neutral-800 text-neutral-300 text-xs rounded px-2 py-1
+                border border-neutral-700 outline-none
+                focus:border-indigo-500
+                [color-scheme:dark]
+              "
+            />
+          </label>
+
+          {/* Due time */}
+          <label className="flex flex-col gap-0.5">
+            <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Time</span>
+            <input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
               className="
                 bg-neutral-800 text-neutral-300 text-xs rounded px-2 py-1
                 border border-neutral-700 outline-none
