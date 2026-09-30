@@ -24,7 +24,7 @@ import {
   RECURRENCE_LABELS,
   NOTIFICATION_LABELS,
 } from "../lib/taskHelpers";
-import { PiRepeatBold } from "react-icons/pi";
+import { PiRepeatBold, PiPencilSimple } from "react-icons/pi";
 
 interface Props {
   task: Task;
@@ -74,6 +74,13 @@ export function TaskRow({
       setDraftNotification(task.notificationMode);
     }
   }, [task, editing]);
+
+  // Automatically close inline editing if global editMode is turned off
+  useEffect(() => {
+    if (!editMode) {
+      setEditing(false);
+    }
+  }, [editMode]);
 
   // Focus title input when entering edit mode
   useEffect(() => {
@@ -183,12 +190,15 @@ export function TaskRow({
         {/* Title */}
         <div className="flex-1 min-w-0">
           <span
-            onClick={() => !editing && setEditing(true)}
+            onClick={() => {
+              if (editMode && !editing) setEditing(true);
+            }}
             className={`
-              block truncate cursor-text
+              block truncate
+              ${editMode ? "cursor-pointer hover:text-indigo-300" : "cursor-default"}
               ${task.completed ? "line-through text-neutral-500" : "text-neutral-200"}
             `}
-            title={task.title}
+            title={editMode ? `Click to edit "${task.title}"` : task.title}
           >
             {task.title}
           </span>
@@ -221,24 +231,40 @@ export function TaskRow({
           </span>
         )}
 
-        {/* Delete button (list edit mode only) */}
+        {/* Edit & Delete buttons (list edit mode only) */}
         {editMode && (
-          <button
-            onClick={() => onDelete(task.id)}
-            aria-label={`Delete "${task.title}"`}
-            className="
-              shrink-0 w-5 h-5 flex items-center justify-center rounded
-              text-neutral-600 hover:text-red-400 hover:bg-red-900/30
-              transition-colors
-            "
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={() => setEditing((prev) => !prev)}
+              aria-label={editing ? `Close edit for "${task.title}"` : `Edit "${task.title}"`}
+              title={editing ? "Close edit" : "Edit task"}
+              className={`
+                w-5 h-5 flex items-center justify-center rounded transition-colors
+                ${editing
+                  ? "text-indigo-400 bg-indigo-950/60 hover:bg-indigo-900/60"
+                  : "text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800"}
+              `}
+            >
+              <PiPencilSimple className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onDelete(task.id)}
+              aria-label={`Delete "${task.title}"`}
+              title="Delete task"
+              className="
+                w-5 h-5 flex items-center justify-center rounded
+                text-neutral-500 hover:text-red-400 hover:bg-red-900/30
+                transition-colors
+              "
+            >
+              ✕
+            </button>
+          </div>
         )}
       </div>
 
       {/* ── Inline edit panel ────────────────────────────────────────── */}
-      {editing && (
+      {editing && editMode && (
         <div className="px-3 pb-2 pt-1 bg-neutral-900/50 border-t border-neutral-800/40">
           {/* Title */}
           <label className="flex flex-col gap-0.5 mb-2">
