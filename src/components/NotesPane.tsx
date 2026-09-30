@@ -9,7 +9,7 @@
  * - Shows a "start typing" empty-state hint when notes are blank AND in preview
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { NotesEditor } from "./NotesEditor";
 import { NotesPreview } from "./NotesPreview";
 import { useBoardStore } from "../stores/boardStore";
@@ -24,6 +24,11 @@ export function NotesPane({ board }: Props) {
   const { saveNotes } = useBoardStore();
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [localNotes, setLocalNotes] = useState(board.notes);
+
+  // Reset local notes when the board changes (safety net)
+  useEffect(() => {
+    setLocalNotes(board.notes);
+  }, [board.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flush to store/disk 800 ms after the last change
   const persistNotes = useCallback(

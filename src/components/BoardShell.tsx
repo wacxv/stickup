@@ -37,7 +37,7 @@ export function BoardShell() {
             ${activePane === "notes" ? "flex flex-1" : "hidden"}
           `}
         >
-          <NotesPane board={board} />
+          <NotesPane key={board.id} board={board} />
         </div>
 
         {/* Tasks pane */}
@@ -48,7 +48,7 @@ export function BoardShell() {
             ${activePane === "tasks" ? "flex flex-1" : "hidden"}
           `}
         >
-          <TasksPane board={board} />
+          <TasksPane key={board.id} board={board} />
         </div>
 
       </div>
