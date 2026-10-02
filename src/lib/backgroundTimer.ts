@@ -35,6 +35,18 @@ export type StopFn = () => void;
 
 const TICK_MS = 60_000; // 60 seconds
 
+let activeTick: (() => Promise<void>) | null = null;
+let ticking = false;
+
+/**
+ * Trigger an immediate background check (e.g. after adding or editing a task).
+ */
+export function triggerBackgroundTimer(): void {
+  if (activeTick && !ticking) {
+    void activeTick();
+  }
+}
+
 /**
  * Start the background timer.
  * Returns a stop function (call on app teardown if ever needed).
@@ -44,15 +56,32 @@ export function startBackgroundTimer(
   getSettings: () => Settings,
   callbacks: BackgroundTimerCallbacks,
 ): StopFn {
-  // Run once immediately so we catch anything that's already overdue on launch
-  void tick(getBoards, getSettings, callbacks);
+  console.info("[backgroundTimer] starting notification timer", {
+    intervalMs: TICK_MS,
+  });
+  activeTick = async () => {
+    if (ticking) return;
+    ticking = true;
+    try {
+      console.info("[backgroundTimer] tick started");
+      await tick(getBoards, getSettings, callbacks);
+      console.info("[backgroundTimer] tick finished");
+    } finally {
+      ticking = false;
+    }
+  };
 
-  const handle = setInterval(
-    () => void tick(getBoards, getSettings, callbacks),
-    TICK_MS,
-  );
+  // Run once immediately so we catch anything that's already due on launch
+  void activeTick();
 
-  return () => clearInterval(handle);
+  const handle = setInterval(() => {
+    void activeTick?.();
+  }, TICK_MS);
+
+  return () => {
+    clearInterval(handle);
+    activeTick = null;
+  };
 }
 
 // ─── Internal ─────────────────────────────────────────────────────────────────
@@ -64,6 +93,11 @@ async function tick(
 ): Promise<void> {
   const boards = getBoards();
   const settings = getSettings();
+
+  console.info("[backgroundTimer] checking boards", {
+    boardCount: boards.length,
+    settings,
+  });
 
   for (const board of boards) {
     let tasks = [...board.tasks];

@@ -9,6 +9,7 @@ import { WelcomeScreen } from "./components/WelcomeScreen";
 import { SettingsPane } from "./components/SettingsPane";
 import { startBackgroundTimer } from "./lib/backgroundTimer";
 import type { StopFn } from "./lib/backgroundTimer";
+import { ensureNotificationPermission } from "./lib/notificationService";
 
 function App() {
   const { loadBoards, boards, loading, reorderTasks } = useBoardStore();
@@ -17,9 +18,16 @@ function App() {
   const stopTimerRef = useRef<StopFn | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function bootstrap() {
       await loadSettings();
       await loadBoards();
+      if (cancelled) return;
+
+      // Ensure notification permission is requested and granted
+      await ensureNotificationPermission();
+      if (cancelled) return;
 
       stopTimerRef.current = startBackgroundTimer(
         () => useBoardStore.getState().boards,
@@ -35,7 +43,9 @@ function App() {
     void bootstrap();
 
     return () => {
+      cancelled = true;
       stopTimerRef.current?.();
+      stopTimerRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

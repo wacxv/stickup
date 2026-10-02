@@ -19,6 +19,8 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { useSettingsStore } from "../stores/settingsStore";
 import type { NotificationMode } from "../types/task";
 import type { StartupVisibility } from "../types/settings";
+import { ensureNotificationPermission } from "../lib/notificationService";
+import { triggerBackgroundTimer } from "../lib/backgroundTimer";
 
 interface Props {
   onClose: () => void;
@@ -36,12 +38,19 @@ export function SettingsPane({ onClose }: Props) {
     try {
       await updateSettings(draft);
 
+      // If notifications are active, ensure the OS permission is granted
+      if (draft.defaultNotificationMode) {
+        await ensureNotificationPermission();
+      }
+
       // Sync autostart with the OS via tauri-plugin-autostart
       if (draft.launchAtStartup) {
         await enable();
       } else {
         await disable();
       }
+
+      triggerBackgroundTimer();
     } finally {
       setSaving(false);
       onClose();

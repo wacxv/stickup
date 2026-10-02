@@ -97,13 +97,20 @@ export function TaskRow({
       return;
     }
     const dueString = joinDue(draftDate, draftTime);
+    const normalizedNewDue = dueString || undefined;
+    const dueChanged = task.due !== normalizedNewDue;
+    const modeChanged = task.notificationMode !== draftNotification;
+    const resetNotification = dueChanged || modeChanged;
+
     onUpdate({
       ...task,
       title: trimmedTitle,
-      due: dueString || undefined,
+      due: normalizedNewDue,
       priority: draftPriority,
       recurrence: draftRecurrence,
       notificationMode: draftNotification,
+      notified: resetNotification ? false : task.notified,
+      last_notified: resetNotification ? null : task.last_notified,
     });
     setEditing(false);
   }
