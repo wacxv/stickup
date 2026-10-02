@@ -15,7 +15,11 @@
  *    (handled in recurrenceService — we only read those fields here)
  */
 
-import { sendNotification } from "@tauri-apps/plugin-notification";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import type { Task, NotificationMode } from "../types/task";
 import type { Settings } from "../types/settings";
 
@@ -28,11 +32,32 @@ export interface NotificationUpdate {
 }
 
 /**
+ * Ensures notification permission has been requested and granted.
+ * Returns true if granted, false otherwise.
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  try {
+    let granted = await isPermissionGranted();
+    console.info("[notificationService] permission status:", granted);
+    if (!granted) {
+      console.info("[notificationService] requesting notification permission");
+      const permission = await requestPermission();
+      granted = permission === "granted";
+      console.info("[notificationService] permission request result:", permission);
+    }
+    return granted;
+  } catch (err) {
+    console.warn("[notificationService] Permission check/request failed:", err);
+    return false;
+  }
+}
+
+/**
  * Check every task in `tasks` and return an array of updates for tasks
  * that should be marked as notified/last_notified.
  * Fires the actual OS notification as a side-effect.
  *
- * Designed to be called from the background timer every 60 s.
+ * Designed to be called from the background timer every 60 s or on demand.
  */
 export async function checkNotifications(
   tasks: Task[],
@@ -41,45 +66,138 @@ export async function checkNotifications(
   const now = new Date();
   const updates: NotificationUpdate[] = [];
 
+  console.info("[notificationService] check started", {
+    now: now.toISOString(),
+    taskCount: tasks.length,
+    settings,
+  });
+
   for (const task of tasks) {
-    if (task.completed) continue;
-    if (!task.due) continue;
+    if (task.completed) {
+      console.info("[notificationService] skip completed task", task.title);
+      continue;
+    }
+    if (!task.due) {
+      console.info("[notificationService] skip task without due date", task.title);
+      continue;
+    }
 
     const effectiveMode = resolveMode(task, settings);
-    if (!effectiveMode) continue;
+    console.info("[notificationService] evaluating task", {
+      id: task.id,
+      title: task.title,
+      due: task.due,
+      effectiveMode,
+      notified: task.notified,
+      last_notified: task.last_notified,
+    });
+    if (!effectiveMode) {
+      console.info("[notificationService] skip notifications disabled", task.title);
+      continue;
+    }
 
-    // Due datetime — if the due string has a time part, use it directly;
-    // otherwise fall back to midnight.
-    const dueDate = task.due!.includes("T")
-      ? new Date(task.due!)
-      : new Date(task.due! + "T00:00:00");
-    const triggerTime = new Date(
-      dueDate.getTime() - settings.reminderLeadMinutes * 60 * 1000,
-    );
+    const hasTime = task.due.includes("T");
 
-    // Not yet in notification window
-    if (now < triggerTime) continue;
+    if (hasTime) {
+      const dueDate = new Date(task.due);
+      const triggerTime = new Date(
+        dueDate.getTime() - settings.reminderLeadMinutes * 60 * 1000,
+      );
 
-    // Overdue — past the due datetime — stop nagging (spec: nag stops when overdue)
-    if (now > dueDate) continue;
-
-    if (effectiveMode === "gentle") {
-      if (task.notified) continue; // already fired once
-      await fire(task);
-      updates.push({
-        taskId: task.id,
-        notified: true,
-        last_notified: now.toISOString(),
+      console.info("[notificationService] datetime window", {
+        title: task.title,
+        dueDate: dueDate.toString(),
+        triggerTime: triggerTime.toString(),
+        now: now.toString(),
       });
-    } else {
-      // "nag" mode
-      if (task.last_notified) {
-        const lastFired = new Date(task.last_notified);
-        const msSinceLast = now.getTime() - lastFired.getTime();
-        const intervalMs = settings.nagIntervalMinutes * 60 * 1000;
-        if (msSinceLast < intervalMs) continue; // not time yet
+
+      // Not yet in notification window
+      if (now < triggerTime) {
+        console.info("[notificationService] skip before reminder window", task.title);
+        continue;
       }
-      await fire(task);
+
+      if (effectiveMode === "gentle") {
+        if (task.notified) {
+          console.info("[notificationService] skip gentle task already notified", task.title);
+          continue;
+        }
+        // Don't fire if ancient (e.g. more than 24 hours overdue without ever notifying)
+        const msPastDue = now.getTime() - dueDate.getTime();
+        if (msPastDue > 24 * 60 * 60 * 1000) {
+          console.info("[notificationService] skip gentle task older than 24 hours", task.title);
+          continue;
+        }
+      } else {
+        // "nag" mode: stop repeating once overdue, unless it hasn't fired at all yet
+        if (now > dueDate && task.notified) {
+          console.info("[notificationService] skip overdue nag task already notified", task.title);
+          continue;
+        }
+
+        if (task.last_notified) {
+          const lastFired = new Date(task.last_notified);
+          const msSinceLast = now.getTime() - lastFired.getTime();
+          const intervalMs = settings.nagIntervalMinutes * 60 * 1000;
+          if (msSinceLast < intervalMs) {
+            console.info("[notificationService] skip nag task before repeat interval", task.title);
+            continue;
+          }
+        }
+      }
+    } else {
+      // Date-only due date: due today or overdue
+      const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      const dueParts = task.due.split("-").map(Number);
+      const dueDay = new Date(dueParts[0], dueParts[1] - 1, dueParts[2]);
+
+      // If due on a future day, not yet time
+      if (dueDay.getTime() > startOfToday.getTime()) {
+        console.info("[notificationService] skip date-only task due on a future day", task.title);
+        continue;
+      }
+
+      if (effectiveMode === "gentle") {
+        if (task.notified) {
+          console.info("[notificationService] skip gentle task already notified", task.title);
+          continue;
+        }
+        const daysPast = Math.round(
+          (startOfToday.getTime() - dueDay.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        if (daysPast > 1) {
+          console.info("[notificationService] skip date-only task older than one day", task.title);
+          continue;
+        }
+      } else {
+        const isPastDueDay = startOfToday.getTime() > dueDay.getTime();
+        if (isPastDueDay && task.notified) {
+          console.info("[notificationService] skip overdue nag task already notified", task.title);
+          continue;
+        }
+
+        if (task.last_notified) {
+          const lastFired = new Date(task.last_notified);
+          const msSinceLast = now.getTime() - lastFired.getTime();
+          const intervalMs = settings.nagIntervalMinutes * 60 * 1000;
+          if (msSinceLast < intervalMs) {
+            console.info("[notificationService] skip nag task before repeat interval", task.title);
+            continue;
+          }
+        }
+      }
+    }
+
+    const sent = await fire(task);
+    console.info("[notificationService] notification attempt", {
+      title: task.title,
+      sent,
+    });
+    if (sent) {
       updates.push({
         taskId: task.id,
         notified: true,
@@ -88,6 +206,9 @@ export async function checkNotifications(
     }
   }
 
+  console.info("[notificationService] check finished", {
+    notificationsSent: updates.length,
+  });
   return updates;
 }
 
@@ -97,17 +218,27 @@ function resolveMode(task: Task, settings: Settings): NotificationMode | null {
   return task.notificationMode ?? settings.defaultNotificationMode;
 }
 
-async function fire(task: Task): Promise<void> {
+async function fire(task: Task): Promise<boolean> {
   try {
-    await sendNotification({
+    const granted = await ensureNotificationPermission();
+    if (!granted) {
+      console.warn(
+        "[notificationService] Notification permission not granted, skipping notification",
+      );
+      return false;
+    }
+
+    sendNotification({
       title: "StickUp",
       body: task.due
         ? `📌 ${task.title} — due ${formatDueLabel(task.due)}`
         : `📌 ${task.title}`,
     });
+    return true;
   } catch (err) {
     // Non-critical — swallow so a notification failure never crashes the timer
     console.warn("[notificationService] sendNotification failed:", err);
+    return false;
   }
 }
 

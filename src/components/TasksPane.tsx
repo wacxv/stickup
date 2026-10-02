@@ -16,6 +16,7 @@ import { AddTaskRow } from "./AddTaskRow";
 import { TaskFilters } from "./TaskFilters";
 import { TaskList } from "./TaskList";
 import type { Priority, Recurrence, NotificationMode } from "../types/task";
+import { triggerBackgroundTimer } from "../lib/backgroundTimer";
 
 interface Props {
   board: Board;
@@ -40,10 +41,12 @@ export function TasksPane({ board }: Props) {
   }) {
     const task = makeTask(partial);
     await addTask(board.id, task);
+    triggerBackgroundTimer();
   }
 
   async function handleUpdate(task: Task) {
     await updateTask(board.id, task);
+    triggerBackgroundTimer();
   }
 
   async function handleDelete(id: string) {
