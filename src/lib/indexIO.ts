@@ -19,15 +19,14 @@
  */
 
 import {
-  BaseDirectory,
   readTextFile,
   writeTextFile,
   exists,
 } from "@tauri-apps/plugin-fs";
 import type { Board } from "../types/board";
 import { listAllBoards } from "./boardIO";
+import { storagePath } from "./storage";
 
-const BASE = BaseDirectory.AppData;
 const INDEX_PATH = "index.json";
 const INDEX_VERSION = 1;
 
@@ -60,9 +59,10 @@ export async function loadIndex(): Promise<{
   boards: Board[];
 }> {
   // ── Try reading the cached index ──
-  if (await exists(INDEX_PATH, { baseDir: BASE })) {
+  const indexPath = await storagePath(INDEX_PATH);
+  if (await exists(indexPath)) {
     try {
-      const raw = await readTextFile(INDEX_PATH, { baseDir: BASE });
+      const raw = await readTextFile(indexPath);
       const parsed = JSON.parse(raw) as IndexFile;
 
       if (parsed.version === INDEX_VERSION && Array.isArray(parsed.boards)) {
@@ -110,7 +110,7 @@ export async function rebuildIndex(
  */
 export async function writeIndex(index: IndexFile): Promise<void> {
   const json = JSON.stringify(index, null, 2);
-  await writeTextFile(INDEX_PATH, json, { baseDir: BASE });
+  await writeTextFile(await storagePath(INDEX_PATH), json);
 }
 
 /**

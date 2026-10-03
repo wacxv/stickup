@@ -3,7 +3,7 @@
  *
  * Orchestrates edit ↔ preview mode for a board's notes.
  *
- * - Starts in edit mode
+ * - Starts in preview mode
  * - "Preview" button switches to rendered HTML view
  * - Auto-saves to the board store 800 ms after the last keystroke
  * - Shows a "start typing" empty-state hint when notes are blank AND in preview
@@ -22,7 +22,7 @@ interface Props {
 
 export function NotesPane({ board }: Props) {
   const { saveNotes } = useBoardStore();
-  const [mode, setMode] = useState<"edit" | "preview">("edit");
+  const [mode, setMode] = useState<"edit" | "preview">("preview");
   const [localNotes, setLocalNotes] = useState(board.notes);
 
   // Reset local notes when the board changes (safety net)
@@ -37,7 +37,7 @@ export function NotesPane({ board }: Props) {
     },
     [board.id, saveNotes],
   );
-  const debouncedPersist = useDebounce(persistNotes, 800);
+  const debouncedPersist = useDebounce(persistNotes, 300);
 
   function handleChange(value: string) {
     setLocalNotes(value);

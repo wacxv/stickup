@@ -105,12 +105,32 @@ function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+/**
+ * Returns today's date as a "YYYY-MM-DD" string in local time.
+ * Used to auto-populate due dates when recurrence is enabled without one.
+ */
+export function todayLocalISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // ─── Sort / filter ────────────────────────────────────────────────────────────
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, standard: 1, low: 2 };
 
+export function sortCompletedLast(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    if (a.completed === b.completed) return 0;
+    return a.completed ? 1 : -1;
+  });
+}
+
 export function sortByDue(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
     if (!a.due && !b.due) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
     if (!a.due) return 1;
     if (!b.due) return -1;

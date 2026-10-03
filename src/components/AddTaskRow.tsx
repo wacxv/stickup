@@ -14,6 +14,7 @@ import {
   RECURRENCE_LABELS,
   NOTIFICATION_LABELS,
   joinDue,
+  todayLocalISO,
 } from "../lib/taskHelpers";
 
 interface Props {
@@ -166,7 +167,15 @@ export function AddTaskRow({ onAdd }: Props) {
             <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Repeat</span>
             <select
               value={recurrence}
-              onChange={(e) => setRecurrence(e.target.value as Recurrence)}
+              onChange={(e) => {
+                const newRecurrence = e.target.value as Recurrence;
+                setRecurrence(newRecurrence);
+                // Auto-default due date to today when enabling recurrence with no date set,
+                // so the recurrence engine always has a date to evaluate.
+                if (newRecurrence !== "none" && !due) {
+                  setDue(todayLocalISO());
+                }
+              }}
               className="
                 bg-neutral-800 text-neutral-300 text-xs rounded px-2 py-1
                 border border-neutral-700 outline-none

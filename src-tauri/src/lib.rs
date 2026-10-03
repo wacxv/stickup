@@ -6,12 +6,29 @@ use tauri::{
     Manager, Runtime,
 };
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_fs::FsExt;
 
 // ─── Tauri commands ───────────────────────────────────────────────────────────
 
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn storage_dir<R: Runtime>(app: tauri::AppHandle<R>) -> tauri::Result<String> {
+    let storage_dir = storage_dir_path(&app)?;
+
+    fs::create_dir_all(&storage_dir)?;
+    Ok(storage_dir.to_string_lossy().into_owned())
+}
+
+fn storage_dir_path<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<std::path::PathBuf> {
+    let app_data_dir = app.path().app_data_dir()?;
+    let parent = app_data_dir
+        .parent()
+        .ok_or_else(|| std::io::Error::other("app data directory has no parent"))?;
+    Ok(parent.join("StickUp"))
 }
 
 // ─── App entry point ──────────────────────────────────────────────────────────
@@ -26,8 +43,13 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![greet, storage_dir])
         .setup(|app| {
+            let app_handle = app.handle();
+            let storage_dir = storage_dir_path(&app_handle)?;
+            fs::create_dir_all(&storage_dir)?;
+            app.fs_scope().allow_directory(&storage_dir, true)?;
+
             setup_tray(app)?;
             apply_startup_visibility(app);
             Ok(())
@@ -46,7 +68,8 @@ pub fn run() {
 
 fn apply_startup_visibility<R: Runtime>(app: &mut tauri::App<R>) {
     // Resolve the app-data directory
-    let app_data = match app.path().app_data_dir() {
+    let app_handle = app.handle();
+    let app_data = match storage_dir_path(&app_handle) {
         Ok(p) => p,
         Err(_) => return, // can't read path, leave window visible
     };

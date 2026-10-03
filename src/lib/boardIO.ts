@@ -13,7 +13,6 @@
  */
 
 import {
-  BaseDirectory,
   mkdir,
   readTextFile,
   writeTextFile,
@@ -25,24 +24,24 @@ import type { Board } from "../types/board";
 import type { Task } from "../types/task";
 import { parseBoardFile, serialiseBoardFile } from "./frontmatter";
 import { slugify, makeUniqueSlug } from "./slugify";
+import { storagePath } from "./storage";
 
-const BASE = BaseDirectory.AppData;
 const BOARDS_DIR = "boards";
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
 /** Create the boards/ directory if it doesn't exist yet. Safe to call repeatedly. */
 export async function ensureBoardsDir(): Promise<void> {
-  await mkdir(BOARDS_DIR, { baseDir: BASE, recursive: true });
+  await mkdir(await storagePath(BOARDS_DIR), { recursive: true });
 }
 
 // ─── Single board CRUD ────────────────────────────────────────────────────────
 
 /** Read and parse one board file by slug. Returns null if the file is missing. */
 export async function readBoard(slug: string): Promise<Board | null> {
-  const path = boardPath(slug);
+  const path = await boardPath(slug);
   try {
-    const raw = await readTextFile(path, { baseDir: BASE });
+    const raw = await readTextFile(path);
     const { meta, notes } = parseBoardFile(raw);
     return { ...meta, notes };
   } catch {
@@ -55,14 +54,14 @@ export async function writeBoard(board: Board): Promise<void> {
   await ensureBoardsDir();
   const updated: Board = { ...board, updated: new Date().toISOString() };
   const content = serialiseBoardFile(updated);
-  await writeTextFile(boardPath(updated.slug), content, { baseDir: BASE });
+  await writeTextFile(await boardPath(updated.slug), content);
 }
 
 /** Delete a board file permanently. No trash/undo. */
 export async function deleteBoard(slug: string): Promise<void> {
-  const path = boardPath(slug);
-  if (await exists(path, { baseDir: BASE })) {
-    await remove(path, { baseDir: BASE });
+  const path = await boardPath(slug);
+  if (await exists(path)) {
+    await remove(path);
   }
 }
 
@@ -90,12 +89,10 @@ export async function renameBoard(
 
   // Write to new path first, then remove old path if slug changed
   await ensureBoardsDir();
-  await writeTextFile(boardPath(newSlug), serialiseBoardFile(renamed), {
-    baseDir: BASE,
-  });
+  await writeTextFile(await boardPath(newSlug), serialiseBoardFile(renamed));
 
   if (newSlug !== board.slug) {
-    await remove(boardPath(board.slug), { baseDir: BASE });
+    await remove(await boardPath(board.slug));
   }
 
   return renamed;
@@ -114,7 +111,7 @@ export async function listAllBoards(): Promise<Board[]> {
 
   let entries: Awaited<ReturnType<typeof readDir>>;
   try {
-    entries = await readDir(BOARDS_DIR, { baseDir: BASE });
+    entries = await readDir(await storagePath(BOARDS_DIR));
   } catch {
     return [];
   }
@@ -174,6 +171,43 @@ export async function createBoard(
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-function boardPath(slug: string): string {
-  return `${BOARDS_DIR}/${slug}.md`;
+async function boardPath(slug: string): Promise<string> {
+  return storagePath(BOARDS_DIR, `${slug}.md`);
 }
+
+// ─── Ghost / lazy-write board helpers ────────────────────────────────────────
+
+/**
+ * Create an in-memory-only board stub.
+ * Nothing is written to disk — call materialiseBoard() when real content arrives.
+ */
+export function makeGhostBoard(
+  title: string,
+  existingSlugs: string[],
+  order: number,
+): Board {
+  const now = new Date().toISOString();
+  const slug = makeUniqueSlug(slugify(title), existingSlugs);
+  return {
+    id: crypto.randomUUID(),
+    title,
+    slug,
+    order,
+    created: now,
+    updated: now,
+    tasks: [],
+    notes: "",
+    ghost: true,
+  };
+}
+
+/**
+ * Write a ghost board to disk for the first time, returning the
+ * materialised board (ghost flag removed).
+ */
+export async function materialiseBoard(board: Board): Promise<Board> {
+  const { ghost: _ghost, ...real } = board;
+  await writeBoard(real);
+  return real;
+}
+

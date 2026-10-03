@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useBoardStore, selectActiveBoard } from "../stores/boardStore";
+import { useSettingsStore } from "../stores/settingsStore";
+import type { LastOpenPane } from "../types/settings";
 import { NotesPane } from "./NotesPane";
 import { TasksPane } from "./TasksPane";
 
-type Pane = "notes" | "tasks";
+type Pane = LastOpenPane;
 
 /**
  * BoardShell
@@ -14,7 +16,13 @@ type Pane = "notes" | "tasks";
  */
 export function BoardShell() {
   const board = useBoardStore(selectActiveBoard);
-  const [activePane, setActivePane] = useState<Pane>("notes");
+  const { settings, updateSettings } = useSettingsStore();
+  const [activePane, setActivePane] = useState<Pane>(settings.lastOpenPane);
+
+  function handlePaneChange(pane: Pane) {
+    setActivePane(pane);
+    void updateSettings({ lastOpenPane: pane });
+  }
 
   if (!board) return null;
 
@@ -22,7 +30,7 @@ export function BoardShell() {
     <div className="flex-1 flex flex-col min-h-0">
       {/* ── Narrow segmented toggle — hidden on wide ──────────────────── */}
       <div className="@[400px]/app:hidden flex shrink-0 border-b border-neutral-800">
-        <PaneToggle active={activePane} onChange={setActivePane} />
+        <PaneToggle active={activePane} onChange={handlePaneChange} />
       </div>
 
       {/* ── Pane area ──────────────────────────────────────────────────── */}
@@ -86,4 +94,3 @@ function PaneToggle({
     </div>
   );
 }
-

@@ -7,6 +7,7 @@
  *   ✓ GFM-style task-list checkboxes  [ ] / [x]
  *   ✓ Fenced code blocks with syntax highlighting via highlight.js
  *   ✓ Inline code
+ *   ✓ Underline (++ ++), strikethrough, headings, links, tables
  *   ✓ Blockquotes
  *   ✗ HTML passthrough (disabled)
  *   ✗ Mermaid, KaTeX, image attachments (out of scope per spec)
@@ -69,6 +70,26 @@ export const md = new MarkdownIt({
 // ── GFM task-list checkbox plugin ────────────────────────────────────────────
 // Transforms  - [ ] text  and  - [x] text  into checkbox list items.
 const LIST_ITEM_RE = /^\[([ xX])\]\s+/;
+
+// Markdown has no standard underline syntax. Keep the light editor syntax
+// explicit and local by treating ++text++ as an underline span.
+md.inline.ruler.before("emphasis", "underline", (state, silent) => {
+  const start = state.pos;
+  if (state.src.slice(start, start + 2) !== "++") return false;
+
+  const end = state.src.indexOf("++", start + 2);
+  if (end === -1 || end === start + 2) return false;
+  if (/\s/.test(state.src[start + 2]) || /\s/.test(state.src[end - 1])) return false;
+  if (silent) return true;
+
+  const token = state.push("underline", "u", 0);
+  token.content = state.src.slice(start + 2, end);
+  state.pos = end + 2;
+  return true;
+});
+
+md.renderer.rules.underline = (tokens, idx) =>
+  `<u>${md.utils.escapeHtml(tokens[idx].content)}</u>`;
 
 // The StateCore type is not re-exported from the markdown-it package root in v15.
 // We extract it from the ruler callback parameter type to stay fully typed.

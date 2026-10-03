@@ -6,8 +6,8 @@
  * (or at the cursor if nothing is selected).
  *
  * Supported toolbar actions:
- *   Bold (** **), Italic (_ _), Unordered list (- ), Ordered list (1. ),
- *   Task checkbox (- [ ] ), Fenced code block (``` ```)
+ *   Bold, italic, underline, strikethrough, lists, checkboxes, blockquotes,
+ *   headings, links, tables, and fenced code blocks.
  */
 
 import { useRef, useCallback, type KeyboardEvent } from "react";
@@ -54,6 +54,14 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
       e.preventDefault();
       const ta = e.currentTarget;
       insertAtCursor(ta, "  ", value, onChange);
+      return;
+    }
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      continueList(e.currentTarget, value, onChange)
+    ) {
+      e.preventDefault();
     }
   }
 
@@ -115,29 +123,49 @@ const TOOLBAR: ToolbarItem[] = [
     action: (ta, val, set) => wrapSelection(ta, val, set, "_", "_", "italic text"),
   },
   {
-    label: "—",
-    title: "Divider",
-    action: () => {},
+    label: "U",
+    title: "Underline (++ ++)",
+    action: (ta, val, set) => wrapSelection(ta, val, set, "++", "++", "underlined text"),
+  },
+  {
+    label: "S",
+    title: "Strikethrough (~~ ~~)",
+    action: (ta, val, set) => wrapSelection(ta, val, set, "~~", "~~", "struck text"),
   },
   {
     label: "•",
     title: "Unordered list",
-    action: (ta, val, set) => prependLines(ta, val, set, "- "),
+    action: (ta, val, set) => toggleLines(ta, val, set, /^- /, "- "),
   },
   {
     label: "1.",
     title: "Ordered list",
-    action: (ta, val, set) => prependLinesNumbered(ta, val, set),
+    action: (ta, val, set) => toggleNumberedLines(ta, val, set),
   },
   {
     label: "☐",
     title: "Task checkbox",
-    action: (ta, val, set) => prependLines(ta, val, set, "- [ ] "),
+    action: (ta, val, set) => toggleLines(ta, val, set, /^- \[[ xX]\] /, "- [ ] "),
   },
   {
-    label: "—",
-    title: "Divider",
-    action: () => {},
+    label: "❯",
+    title: "Blockquote",
+    action: (ta, val, set) => toggleLines(ta, val, set, /^> /, "> "),
+  },
+  {
+    label: "H",
+    title: "Heading (H1/H2/H3)",
+    action: (ta, val, set) => cycleHeading(ta, val, set),
+  },
+  {
+    label: "↗",
+    title: "Link ([text](url))",
+    action: (ta, val, set) => insertLink(ta, val, set),
+  },
+  {
+    label: "▦",
+    title: "Table",
+    action: (ta, val, set) => insertTable(ta, val, set),
   },
   {
     label: "</>",
@@ -153,7 +181,54 @@ const TOOLBAR: ToolbarItem[] = [
 
 // ─── Toolbar action helpers ───────────────────────────────────────────────────
 
-/** Wrap the selected text (or placeholder) with a prefix/suffix. */
+function continueList(
+  ta: HTMLTextAreaElement,
+  value: string,
+  onChange: (v: string) => void,
+): boolean {
+  if (ta.selectionStart !== ta.selectionEnd) return false;
+  const cursor = ta.selectionStart;
+  const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+  const lineEnd = value.indexOf("\n", cursor);
+  const line = value.slice(lineStart, lineEnd === -1 ? value.length : lineEnd);
+  const beforeCursor = line.slice(0, cursor - lineStart);
+  const bullet = /^(\s*)- (.*)$/.exec(beforeCursor);
+  const checkbox = /^(\s*)- \[[ xX]\] (.*)$/.exec(beforeCursor);
+  const numbered = /^(\s*)(\d+)\. (.*)$/.exec(beforeCursor);
+  if (!bullet && !checkbox && !numbered) return false;
+
+  let markerLength: number;
+  if (checkbox) {
+    markerLength = checkbox[0].length - checkbox[2].length;
+  } else if (numbered) {
+    markerLength = numbered[0].length - numbered[3].length;
+  } else {
+    markerLength = bullet![0].length - bullet![2].length;
+  }
+  const content = beforeCursor.slice(markerLength);
+  if (!content.trim()) {
+    const newValue = value.slice(0, lineStart) + "\n" + value.slice(cursor);
+    onChange(newValue);
+    requestAnimationFrame(() => {
+      ta.selectionStart = ta.selectionEnd = lineStart + 1;
+    });
+    return true;
+  }
+
+  const marker = checkbox
+    ? `${checkbox[1]}- [ ] `
+    : numbered
+      ? `${numbered[1]}${Number(numbered[2]) + 1}. `
+      : `${bullet![1]}- `;
+  const newValue = value.slice(0, cursor) + "\n" + marker + value.slice(cursor);
+  onChange(newValue);
+  requestAnimationFrame(() => {
+    ta.selectionStart = ta.selectionEnd = cursor + marker.length + 1;
+  });
+  return true;
+}
+
+/** Toggle markdown delimiters around the selected text (or placeholder). */
 function wrapSelection(
   ta: HTMLTextAreaElement,
   value: string,
@@ -163,6 +238,22 @@ function wrapSelection(
   placeholder: string,
 ) {
   const { selectionStart: start, selectionEnd: end } = ta;
+  const wrapped =
+    start >= prefix.length &&
+    value.slice(start - prefix.length, start) === prefix &&
+    value.slice(end, end + suffix.length) === suffix;
+  if (wrapped) {
+    const newVal =
+      value.slice(0, start - prefix.length) +
+      value.slice(start, end) +
+      value.slice(end + suffix.length);
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      ta.selectionStart = start - prefix.length;
+      ta.selectionEnd = end - prefix.length;
+    });
+    return;
+  }
   const selected = value.slice(start, end) || placeholder;
   const newVal = value.slice(0, start) + prefix + selected + suffix + value.slice(end);
   onChange(newVal);
@@ -173,20 +264,22 @@ function wrapSelection(
   });
 }
 
-/** Prepend each selected line with a fixed prefix. */
-function prependLines(
+/** Add or remove a fixed prefix from each selected line. */
+function toggleLines(
   ta: HTMLTextAreaElement,
   value: string,
   onChange: (v: string) => void,
+  pattern: RegExp,
   prefix: string,
 ) {
   const { selectionStart: start, selectionEnd: end } = ta;
   const lineStart = value.lastIndexOf("\n", start - 1) + 1;
   const lineEnd = value.indexOf("\n", end);
   const block = value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-  const prefixed = block
-    .split("\n")
-    .map((l) => prefix + l)
+  const lines = block.split("\n");
+  const removePrefix = lines.every((line) => pattern.test(line));
+  const prefixed = lines
+    .map((line) => (removePrefix ? line.replace(pattern, "") : prefix + line))
     .join("\n");
   const newVal = value.slice(0, lineStart) + prefixed + (lineEnd === -1 ? "" : value.slice(lineEnd));
   onChange(newVal);
@@ -197,8 +290,8 @@ function prependLines(
   });
 }
 
-/** Prepend selected lines with incrementing numbers (1. 2. 3.). */
-function prependLinesNumbered(
+/** Add or remove incrementing numbers from the selected lines. */
+function toggleNumberedLines(
   ta: HTMLTextAreaElement,
   value: string,
   onChange: (v: string) => void,
@@ -207,9 +300,10 @@ function prependLinesNumbered(
   const lineStart = value.lastIndexOf("\n", start - 1) + 1;
   const lineEnd = value.indexOf("\n", end);
   const block = value.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-  const prefixed = block
-    .split("\n")
-    .map((l, i) => `${i + 1}. ${l}`)
+  const lines = block.split("\n");
+  const removePrefix = lines.every((line) => /^\d+\. /.test(line));
+  const prefixed = lines
+    .map((line, i) => (removePrefix ? line.replace(/^\d+\. /, "") : `${i + 1}. ${line}`))
     .join("\n");
   const newVal = value.slice(0, lineStart) + prefixed + (lineEnd === -1 ? "" : value.slice(lineEnd));
   onChange(newVal);
@@ -220,7 +314,58 @@ function prependLinesNumbered(
   });
 }
 
-/** Insert a fenced code block, placing the cursor inside. */
+function cycleHeading(
+  ta: HTMLTextAreaElement,
+  value: string,
+  onChange: (v: string) => void,
+) {
+  const { selectionStart: start } = ta;
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = value.indexOf("\n", start);
+  const line = value.slice(lineStart, lineEnd === -1 ? value.length : lineEnd);
+  const match = /^(#{1,3}) ?(.*)$/.exec(line);
+  const level = match ? (match[1].length % 3) + 1 : 1;
+  const content = match ? match[2] : line;
+  const replacement = `${"#".repeat(level)} ${content}`;
+  const newValue = value.slice(0, lineStart) + replacement + value.slice(lineStart + line.length);
+  onChange(newValue);
+  requestAnimationFrame(() => {
+    ta.selectionStart = lineStart;
+    ta.selectionEnd = lineStart + replacement.length;
+  });
+}
+
+function insertLink(
+  ta: HTMLTextAreaElement,
+  value: string,
+  onChange: (v: string) => void,
+) {
+  const { selectionStart: start, selectionEnd: end } = ta;
+  const selected = value.slice(start, end) || "link text";
+  const replacement = `[${selected}](url)`;
+  onChange(value.slice(0, start) + replacement + value.slice(end));
+  requestAnimationFrame(() => {
+    const urlStart = start + selected.length + 3;
+    ta.selectionStart = urlStart;
+    ta.selectionEnd = urlStart + 3;
+  });
+}
+
+function insertTable(
+  ta: HTMLTextAreaElement,
+  value: string,
+  onChange: (v: string) => void,
+) {
+  const { selectionStart: start, selectionEnd: end } = ta;
+  const table = "| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |";
+  onChange(value.slice(0, start) + table + value.slice(end));
+  requestAnimationFrame(() => {
+    ta.selectionStart = start;
+    ta.selectionEnd = start + table.length;
+  });
+}
+
+/** Toggle a fenced code block, placing the cursor inside when adding one. */
 function insertCodeBlock(
   ta: HTMLTextAreaElement,
   value: string,
@@ -228,6 +373,16 @@ function insertCodeBlock(
 ) {
   const { selectionStart: start, selectionEnd: end } = ta;
   const selected = value.slice(start, end);
+  if (selected.startsWith("```\n") && selected.endsWith("\n```")) {
+    const unwrapped = selected.slice(4, -4);
+    const newVal = value.slice(0, start) + unwrapped + value.slice(end);
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      ta.selectionStart = start;
+      ta.selectionEnd = start + unwrapped.length;
+    });
+    return;
+  }
   const block = "```\n" + (selected || "code here") + "\n```";
   const newVal = value.slice(0, start) + block + value.slice(end);
   onChange(newVal);
