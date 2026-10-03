@@ -26,6 +26,7 @@ import {
   NOTIFICATION_LABELS,
 } from "../lib/taskHelpers";
 import { PiRepeatBold, PiPencilSimple } from "react-icons/pi";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface Props {
   task: Task;
@@ -49,6 +50,7 @@ export function TaskRow({
   onMoveDown,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // ── Draft state for all editable fields ──────────────────────────────────
   const [draftTitle, setDraftTitle] = useState(task.title);
@@ -256,7 +258,7 @@ export function TaskRow({
               <PiPencilSimple className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => onDelete(task.id)}
+              onClick={() => setConfirmingDelete(true)}
               aria-label={`Delete "${task.title}"`}
               title="Delete task"
               className="
@@ -389,6 +391,20 @@ export function TaskRow({
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Delete confirmation ────────────────────────────────────────── */}
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={`Delete "${task.title}"?`}
+          message="This task will be permanently removed from the board."
+          confirmLabel="Delete task"
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            onDelete(task.id);
+          }}
+          onCancel={() => setConfirmingDelete(false)}
+        />
       )}
     </div>
   );

@@ -37,7 +37,7 @@ export function NotesPane({ board }: Props) {
     },
     [board.id, saveNotes],
   );
-  const debouncedPersist = useDebounce(persistNotes, 800);
+  const debouncedPersist = useDebounce(persistNotes, 300);
 
   function handleChange(value: string) {
     setLocalNotes(value);

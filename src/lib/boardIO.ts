@@ -174,3 +174,40 @@ export async function createBoard(
 async function boardPath(slug: string): Promise<string> {
   return storagePath(BOARDS_DIR, `${slug}.md`);
 }
+
+// ─── Ghost / lazy-write board helpers ────────────────────────────────────────
+
+/**
+ * Create an in-memory-only board stub.
+ * Nothing is written to disk — call materialiseBoard() when real content arrives.
+ */
+export function makeGhostBoard(
+  title: string,
+  existingSlugs: string[],
+  order: number,
+): Board {
+  const now = new Date().toISOString();
+  const slug = makeUniqueSlug(slugify(title), existingSlugs);
+  return {
+    id: crypto.randomUUID(),
+    title,
+    slug,
+    order,
+    created: now,
+    updated: now,
+    tasks: [],
+    notes: "",
+    ghost: true,
+  };
+}
+
+/**
+ * Write a ghost board to disk for the first time, returning the
+ * materialised board (ghost flag removed).
+ */
+export async function materialiseBoard(board: Board): Promise<Board> {
+  const { ghost: _ghost, ...real } = board;
+  await writeBoard(real);
+  return real;
+}
+
