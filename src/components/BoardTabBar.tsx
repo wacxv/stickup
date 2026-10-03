@@ -8,7 +8,7 @@ import {
 import { useBoardStore } from "../stores/boardStore";
 import type { Board } from "../types/board";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { storagePath } from "../lib/storage";
 
 /**
@@ -192,11 +192,10 @@ export function BoardTabBar() {
     try {
       // Build the absolute path to the .md file
       const filePath = await storagePath("boards", `${board.slug}.md`);
-      // tauri-plugin-opener's openPath with showItemInFolder opens Explorer
-      // with the file highlighted on Windows.
-      await openPath(filePath);
+      // Reveal the file in Explorer instead of opening it with its associated app.
+      await revealItemInDir(filePath);
     } catch (err) {
-      console.warn("[BoardTabBar] openPath failed:", err);
+      console.warn("[BoardTabBar] revealItemInDir failed:", err);
     }
   }
 
