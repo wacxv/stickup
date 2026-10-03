@@ -159,7 +159,7 @@ const TOOLBAR: ToolbarItem[] = [
   },
   {
     label: "↗",
-    title: "Link",
+    title: "Link ([text](url))",
     action: (ta, val, set) => insertLink(ta, val, set),
   },
   {
@@ -342,13 +342,12 @@ function insertLink(
 ) {
   const { selectionStart: start, selectionEnd: end } = ta;
   const selected = value.slice(start, end) || "link text";
-  const url = window.prompt("Link URL", "https://");
-  if (!url) return;
-  const replacement = `[${selected}](${url})`;
+  const replacement = `[${selected}](url)`;
   onChange(value.slice(0, start) + replacement + value.slice(end));
   requestAnimationFrame(() => {
-    ta.selectionStart = start + 1;
-    ta.selectionEnd = start + 1 + selected.length;
+    const urlStart = start + selected.length + 3;
+    ta.selectionStart = urlStart;
+    ta.selectionEnd = urlStart + 3;
   });
 }
 
