@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: Settings = {
   launchAtStartup: false,
   startupVisibility: "shown",
   windowBounds: null,
+  lastOpenPane: "notes",
   defaultNotificationMode: "gentle",
   reminderLeadMinutes: 30,
   nagIntervalMinutes: 15,
