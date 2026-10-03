@@ -8,14 +8,13 @@
  */
 
 import {
-  BaseDirectory,
   readTextFile,
   writeTextFile,
   exists,
 } from "@tauri-apps/plugin-fs";
 import type { Settings } from "../types/settings";
+import { storagePath } from "./storage";
 
-const BASE = BaseDirectory.AppData;
 const SETTINGS_PATH = "settings.json";
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
@@ -37,12 +36,13 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 export async function readSettings(): Promise<Settings> {
   try {
-    if (!(await exists(SETTINGS_PATH, { baseDir: BASE }))) {
+    const settingsPath = await storagePath(SETTINGS_PATH);
+    if (!(await exists(settingsPath))) {
       await writeSettings(DEFAULT_SETTINGS);
       return { ...DEFAULT_SETTINGS };
     }
 
-    const raw = await readTextFile(SETTINGS_PATH, { baseDir: BASE });
+    const raw = await readTextFile(settingsPath);
     const parsed = JSON.parse(raw) as Partial<Settings>;
 
     // Merge with defaults so new fields added in future versions always
@@ -60,7 +60,7 @@ export async function readSettings(): Promise<Settings> {
  */
 export async function writeSettings(settings: Settings): Promise<void> {
   const json = JSON.stringify(settings, null, 2);
-  await writeTextFile(SETTINGS_PATH, json, { baseDir: BASE });
+  await writeTextFile(await storagePath(SETTINGS_PATH), json);
 }
 
 /**
