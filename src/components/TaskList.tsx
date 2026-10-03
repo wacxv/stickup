@@ -12,7 +12,11 @@ import { useState } from "react";
 import type { Task } from "../types/task";
 import { TaskRow } from "./TaskRow";
 import type { FilterPriority, FilterRecurrence } from "../lib/taskHelpers";
-import { sortByDue, applyFilters } from "../lib/taskHelpers";
+import {
+  sortByDue,
+  sortCompletedLast,
+  applyFilters,
+} from "../lib/taskHelpers";
 
 interface Props {
   tasks: Task[];
@@ -37,7 +41,7 @@ export function TaskList({
 
   // Apply filters then optionally sort
   const filtered = applyFilters(tasks, filterPriority, filterRecurrence);
-  const visible = sortEnabled ? sortByDue(filtered) : filtered;
+  const visible = sortEnabled ? sortByDue(filtered) : sortCompletedLast(filtered);
 
   const completedCount = tasks.filter((t) => t.completed).length;
   const totalCount = tasks.length;

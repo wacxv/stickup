@@ -109,8 +109,16 @@ function startOfLocalDay(d: Date): Date {
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, standard: 1, low: 2 };
 
+export function sortCompletedLast(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    if (a.completed === b.completed) return 0;
+    return a.completed ? 1 : -1;
+  });
+}
+
 export function sortByDue(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
     if (!a.due && !b.due) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
     if (!a.due) return 1;
     if (!b.due) return -1;
