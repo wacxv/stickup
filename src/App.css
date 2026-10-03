@@ -77,6 +77,8 @@ body {
 
 .prose strong { color: #f5f5f5; font-weight: 600; }
 .prose em     { color: #c8c8c8; }
+.prose u      { text-decoration: underline; text-underline-offset: 2px; }
+.prose del    { color: #a3a3a3; }
 
 .prose a {
   color: #818cf8;
