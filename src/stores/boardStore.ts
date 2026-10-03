@@ -236,7 +236,10 @@ async function mutateBoard(
 
   try {
     const updated = await mutate(board);
-    set({ boards: boards.map((b) => (b.id === boardId ? updated : b)) });
+    // Re-read current boards after the async IO to avoid overwriting
+    // concurrent mutations (e.g. the background timer and a UI edit racing).
+    const currentBoards = get().boards;
+    set({ boards: currentBoards.map((b) => (b.id === boardId ? updated : b)) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[boardStore] mutation failed:", err);

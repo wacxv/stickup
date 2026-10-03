@@ -40,8 +40,10 @@ export function getRecurrenceResets(tasks: Task[]): Task[] {
         : new Date(task.due + "T00:00:00"),
     );
 
-    // Not yet past due — nothing to reset
-    if (dueDate >= today) continue;
+    // Not yet past due — nothing to reset.
+    // dueDate === today means the period just rolled over at local midnight,
+    // so we DO want to reset (advance to the next period).
+    if (dueDate > today) continue;
 
     // Already reset today — skip
     if (task.last_reset) {

@@ -19,6 +19,7 @@ import {
   isDueToday,
   splitDue,
   joinDue,
+  todayLocalISO,
   PRIORITY_COLORS,
   PRIORITY_LABELS,
   RECURRENCE_LABELS,
@@ -327,7 +328,15 @@ export function TaskRow({
               <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Repeat</span>
               <select
                 value={draftRecurrence}
-                onChange={(e) => setDraftRecurrence(e.target.value as Recurrence)}
+                onChange={(e) => {
+                  const newRecurrence = e.target.value as Recurrence;
+                  setDraftRecurrence(newRecurrence);
+                  // Auto-default due date to today when enabling recurrence with no date set,
+                  // so the recurrence engine always has a date to evaluate.
+                  if (newRecurrence !== "none" && !draftDate) {
+                    setDraftDate(todayLocalISO());
+                  }
+                }}
                 className={fieldClass}
               >
                 {(["none", "daily", "weekly"] as Recurrence[]).map((r) => (
