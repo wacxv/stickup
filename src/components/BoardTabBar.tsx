@@ -10,7 +10,7 @@ import type { Board } from "../types/board";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { storagePath } from "../lib/storage";
-import { FiChevronDown, FiPlus, FiX } from "react-icons/fi";
+import { FiChevronDown, FiClock, FiPlus, FiX } from "react-icons/fi";
 
 /**
  * BoardTabBar
@@ -49,6 +49,8 @@ export function BoardTabBar() {
     renameActiveBoard,
     deleteBoardById,
     closeBoard,
+    recentlyClosed,
+    reopenBoard,
   } = useBoardStore();
 
   // ── Inline rename state ──────────────────────────────────────────────────
@@ -61,6 +63,8 @@ export function BoardTabBar() {
   const [visibleCount, setVisibleCount] = useState<number>(boards.length);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const recentRef = useRef<HTMLDivElement>(null);
 
   // ── Context menu ─────────────────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -79,7 +83,8 @@ export function BoardTabBar() {
       const tabEls = Array.from(
         strip.querySelectorAll<HTMLElement>("[data-measure-tab]"),
       );
-      const addButtonWidth = 32;
+      // Reserve space for the + and recently-closed buttons.
+      const addButtonWidth = 64;
       const overflowButtonWidth = 50;
 
       function fitCount(available: number) {
@@ -108,15 +113,18 @@ export function BoardTabBar() {
 
   // Close overflow dropdown on outside click
   useEffect(() => {
-    if (!overflowOpen) return;
+    if (!overflowOpen && !recentOpen) return;
     const handler = (e: globalThis.MouseEvent) => {
       if (!overflowRef.current?.contains(e.target as Node)) {
         setOverflowOpen(false);
       }
+      if (!recentRef.current?.contains(e.target as Node)) {
+        setRecentOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [overflowOpen]);
+  }, [overflowOpen, recentOpen]);
 
   // Close context menu on outside click or Escape
   useEffect(() => {
@@ -159,7 +167,8 @@ export function BoardTabBar() {
     if (trimmed) {
       // "Untitled" is the in-memory placeholder, not real user content.
       if (board?.ghost && trimmed === "Untitled") {
-        await closeBoard(renamingId);
+        // Leaving the placeholder unchanged commits only the rename UI.
+        // Keep the ghost available so the user can add notes or tasks.
         setRenamingId(null);
         return;
       }
@@ -434,6 +443,53 @@ export function BoardTabBar() {
         >
           <FiPlus aria-hidden="true" />
         </button>
+
+        <div ref={recentRef} className="relative flex items-center">
+          <button
+            type="button"
+            onClick={() => setRecentOpen((open) => !open)}
+            title="Recently closed boards"
+            aria-label="Recently closed boards"
+            aria-expanded={recentOpen}
+            disabled={recentlyClosed.length === 0}
+            className="
+              flex items-center justify-center w-8 h-full shrink-0
+              text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800
+              transition-colors disabled:opacity-30 disabled:cursor-default
+            "
+          >
+            <FiClock aria-hidden="true" />
+          </button>
+          {recentOpen && recentlyClosed.length > 0 && (
+            <div
+              role="menu"
+              aria-label="Recently closed boards"
+              className="
+                absolute top-full right-0 z-50 min-w-[180px]
+                bg-neutral-800 border border-neutral-700 rounded-md
+                shadow-lg py-1 mt-0.5
+              "
+            >
+              {recentlyClosed.map((board) => (
+                <button
+                  key={board.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    void reopenBoard(board.id);
+                    setRecentOpen(false);
+                  }}
+                  className="
+                    w-full text-left px-3 py-1.5 text-xs text-neutral-300
+                    hover:bg-neutral-700 hover:text-neutral-100 truncate
+                  "
+                >
+                  {board.title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="flex-1" />
       </div>
