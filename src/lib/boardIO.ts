@@ -28,6 +28,14 @@ import { storagePath } from "./storage";
 
 const BOARDS_DIR = "boards";
 
+/** Raised when a user-selected board title would replace another board file. */
+export class BoardNameCollisionError extends Error {
+  constructor(public readonly title: string) {
+    super(`A board named "${title}" already exists.`);
+    this.name = "BoardNameCollisionError";
+  }
+}
+
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
 /** Create the boards/ directory if it doesn't exist yet. Safe to call repeatedly. */
@@ -52,6 +60,7 @@ export async function readBoard(slug: string): Promise<Board | null> {
 /** Write a board to disk (creates or overwrites). Updates the `updated` timestamp. */
 export async function writeBoard(board: Board): Promise<void> {
   await ensureBoardsDir();
+  await assertPathAvailable(board.slug, board.id, board.title);
   const updated: Board = { ...board, updated: new Date().toISOString() };
   const content = serialiseBoardFile(updated);
   await writeTextFile(await boardPath(updated.slug), content);
@@ -72,13 +81,9 @@ export async function deleteBoard(slug: string): Promise<void> {
 export async function renameBoard(
   board: Board,
   newTitle: string,
-  existingSlugs: string[],
 ): Promise<Board> {
-  const newSlug = makeUniqueSlug(
-    slugify(newTitle),
-    existingSlugs,
-    board.slug, // exclude own slug so rename to same name is a no-op
-  );
+  const newSlug = slugify(newTitle);
+  await assertPathAvailable(newSlug, board.id, newTitle);
 
   const renamed: Board = {
     ...board,
@@ -207,7 +212,43 @@ export function makeGhostBoard(
  */
 export async function materialiseBoard(board: Board): Promise<Board> {
   const { ghost: _ghost, ...real } = board;
-  await writeBoard(real);
-  return real;
+  const reserved = await reserveGhostName(real);
+  const materialised = { ...real, title: reserved.title, slug: reserved.slug };
+  await writeBoard(materialised);
+  return materialised;
 }
 
+/**
+ * Pick a fresh filename for an untouched placeholder. The directory is
+ * checked at the moment the ghost is first persisted, rather than relying on
+ * the in-memory board list from when it was created.
+ */
+async function reserveGhostName(board: Board): Promise<Pick<Board, "title" | "slug">> {
+  await ensureBoardsDir();
+  if (board.title !== "Untitled") {
+    return { title: board.title, slug: slugify(board.title) };
+  }
+
+  const baseTitle = "Untitled";
+  let suffix = 0;
+
+  while (true) {
+    const title = suffix === 0 ? baseTitle : `${baseTitle} (${suffix})`;
+    const slug = slugify(title);
+    if (!(await exists(await boardPath(slug)))) return { title, slug };
+    suffix++;
+  }
+}
+
+async function assertPathAvailable(
+  slug: string,
+  boardId: string,
+  title: string,
+): Promise<void> {
+  const path = await boardPath(slug);
+  if (!(await exists(path))) return;
+
+  const current = await readBoard(slug);
+  if (current?.id === boardId) return;
+  throw new BoardNameCollisionError(title);
+}
