@@ -4,14 +4,15 @@
  * Read / write index.json — a lightweight cache of board metadata so the
  * app can show the board list without parsing every .md file on startup.
  *
- * index.json is a CACHE ONLY.  The frontmatter in each board's .md file
- * is the source of truth.  If index.json is missing, corrupt, or
- * inconsistent, it is rebuilt by scanning boards/*.md via boardIO.
+ * index.json is a CACHE ONLY for board metadata and tab state. The frontmatter
+ * in each board's .md file is the source of truth. If index.json is missing,
+ * corrupt, or inconsistent, it is rebuilt by scanning boards/*.md via boardIO.
  *
  * Shape of index.json:
  * {
  *   "version": 1,
  *   "lastOpenBoardId": "<id> | null",
+ *   "closedBoardIds": ["<id>", …],
  *   "boards": [
  *     { "id": "…", "title": "…", "slug": "…", "order": 0 }
  *   ]
@@ -42,6 +43,8 @@ export interface BoardSummary {
 export interface IndexFile {
   version: number;
   lastOpenBoardId: string | null;
+  /** Board IDs closed from the tab strip, newest first. */
+  closedBoardIds: string[];
   boards: BoardSummary[];
 }
 
@@ -66,6 +69,9 @@ export async function loadIndex(): Promise<{
       const parsed = JSON.parse(raw) as IndexFile;
 
       if (parsed.version === INDEX_VERSION && Array.isArray(parsed.boards)) {
+        parsed.closedBoardIds = Array.isArray(parsed.closedBoardIds)
+          ? parsed.closedBoardIds
+          : [];
         // Index looks valid — trust it for the summary list but don't
         // return full Board objects from here (caller will load on demand).
         return { index: parsed, boards: [] };
@@ -98,6 +104,7 @@ export async function rebuildIndex(
   const index: IndexFile = {
     version: INDEX_VERSION,
     lastOpenBoardId: validLastOpen,
+    closedBoardIds: [],
     boards: boards.map(toSummary),
   };
 
@@ -114,17 +121,27 @@ export async function writeIndex(index: IndexFile): Promise<void> {
 }
 
 /**
- * Update the index after a board is created, renamed, reordered, or deleted.
- * Accepts the new full board list so the caller controls the source of truth.
+ * Update the index after a board is created, renamed, reordered, closed,
+ * reopened, or deleted. Closed boards remain in the summary list so their
+ * files are recoverable, while closedBoardIds controls tab visibility.
  */
 export async function syncIndex(
   boards: Board[],
   lastOpenBoardId: string | null,
+  closedBoardIds: string[] = [],
+  closedBoards: Board[] = [],
 ): Promise<IndexFile> {
+  const allBoards = [
+    ...boards,
+    ...closedBoards.filter(
+      (closed) => !boards.some((board) => board.id === closed.id),
+    ),
+  ];
   const index: IndexFile = {
     version: INDEX_VERSION,
     lastOpenBoardId,
-    boards: boards.map(toSummary),
+    closedBoardIds,
+    boards: allBoards.map(toSummary),
   };
   await writeIndex(index);
   return index;
