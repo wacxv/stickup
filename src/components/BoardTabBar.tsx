@@ -168,7 +168,7 @@ export function BoardTabBar() {
     const board = boards.find((b) => b.id === renamingId);
     if (trimmed) {
       // "Untitled" is the in-memory placeholder, not real user content.
-      if (board?.ghost && trimmed === "Untitled") {
+      if (board?.ghost && renameValue === "Untitled") {
         // Leaving the placeholder unchanged commits only the rename UI.
         // Keep the ghost available so the user can add notes or tasks.
         setRenamingId(null);
@@ -177,12 +177,12 @@ export function BoardTabBar() {
       // Only the active board can be renamed via the tab bar
       if (renamingId === activeBoardId) {
         try {
-          await renameActiveBoard(trimmed);
+          await renameActiveBoard(renameValue);
         } catch (err) {
           setRenameError(
             err instanceof Error
               ? err.message
-              : `Unable to rename "${trimmed}".`,
+              : `Unable to rename "${renameValue}".`,
           );
           return;
         }
@@ -198,6 +198,7 @@ export function BoardTabBar() {
   }
 
   function handleRenameKey(e: KeyboardEvent<HTMLInputElement>) {
+    e.stopPropagation();
     if (e.key === "Enter") commitRename();
     if (e.key === "Escape") {
       // Cancel rename — if this was a fresh ghost, discard it
