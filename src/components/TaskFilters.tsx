@@ -15,6 +15,7 @@ import { useRef, useEffect, useState } from "react";
 import type { Priority, Recurrence } from "../types/task";
 import type { FilterPriority, FilterRecurrence } from "../lib/taskHelpers";
 import { PRIORITY_LABELS, RECURRENCE_LABELS } from "../lib/taskHelpers";
+import { FiSliders } from "react-icons/fi";
 
 interface Props {
   sortByDue: boolean;
@@ -74,7 +75,7 @@ export function TaskFilters({
               : "bg-neutral-800 text-neutral-400 hover:text-neutral-200"}
           `}
         >
-          <span>⚙</span>
+          <FiSliders aria-hidden="true" />
           <span>Filters{hasActiveFilters ? " •" : ""}</span>
         </button>
 

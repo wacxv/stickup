@@ -32,6 +32,36 @@ body {
   overflow: hidden;
 }
 
+/* The notes pane can be half the window at medium widths, so toolbar
+ * responsiveness must follow the pane rather than the window. */
+.notes-toolbar {
+  container-type: inline-size;
+  container-name: notes-toolbar;
+  position: relative;
+  z-index: 1;
+  overflow: visible;
+}
+
+.toolbar-inline {
+  display: none;
+  flex: 0 0 auto;
+}
+
+.toolbar-overflow {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+@container notes-toolbar (min-width: 360px) {
+  .toolbar-inline {
+    display: inline-flex;
+  }
+
+  .toolbar-overflow {
+    display: none;
+  }
+}
+
 /* ── Title-bar button shared styles ─────────────────────────────────────── */
 .titlebar-btn {
   display: flex;

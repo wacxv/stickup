@@ -16,6 +16,7 @@ import {
   joinDue,
   todayLocalISO,
 } from "../lib/taskHelpers";
+import { FiMoreHorizontal, FiPlus } from "react-icons/fi";
 
 interface Props {
   onAdd: (partial: {
@@ -69,7 +70,7 @@ export function AddTaskRow({ onAdd }: Props) {
     <div className="shrink-0 border-t border-neutral-800 bg-neutral-950">
       {/* ── Title row ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 px-3 py-2">
-        <span className="text-neutral-600 text-sm select-none">+</span>
+        <FiPlus className="text-neutral-600 text-sm shrink-0" aria-hidden="true" />
         <input
           ref={inputRef}
           value={title}
@@ -93,7 +94,7 @@ export function AddTaskRow({ onAdd }: Props) {
               : "text-neutral-600 hover:text-neutral-400"}
           `}
         >
-          ⋯
+          <FiMoreHorizontal aria-hidden="true" />
         </button>
         {/* Submit */}
         <button

@@ -10,6 +10,7 @@ import type { Board } from "../types/board";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { storagePath } from "../lib/storage";
+import { FiChevronDown, FiClock, FiPlus, FiX } from "react-icons/fi";
 
 /**
  * BoardTabBar
@@ -48,6 +49,8 @@ export function BoardTabBar() {
     renameActiveBoard,
     deleteBoardById,
     closeBoard,
+    recentlyClosed,
+    reopenBoard,
   } = useBoardStore();
 
   // ── Inline rename state ──────────────────────────────────────────────────
@@ -60,6 +63,8 @@ export function BoardTabBar() {
   const [visibleCount, setVisibleCount] = useState<number>(boards.length);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const recentRef = useRef<HTMLDivElement>(null);
 
   // ── Context menu ─────────────────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -74,17 +79,28 @@ export function BoardTabBar() {
     if (!strip) return;
 
     const measure = () => {
-      // Reserve ~72px for the overflow button + add button
-      const available = strip.clientWidth - 72;
+      // Measure every board, including tabs currently hidden by overflow.
       const tabEls = Array.from(
-        strip.querySelectorAll<HTMLButtonElement>("[data-tab]"),
+        strip.querySelectorAll<HTMLElement>("[data-measure-tab]"),
       );
-      let used = 0;
-      let count = 0;
-      for (const el of tabEls) {
-        used += el.offsetWidth;
-        if (used > available) break;
-        count++;
+      // Reserve space for the + and recently-closed buttons.
+      const addButtonWidth = 64;
+      const overflowButtonWidth = 50;
+
+      function fitCount(available: number) {
+        let used = 0;
+        let count = 0;
+        for (const el of tabEls) {
+          used += el.offsetWidth;
+          if (used > available) break;
+          count++;
+        }
+        return count;
+      }
+
+      let count = fitCount(strip.clientWidth - addButtonWidth);
+      if (count < boards.length) {
+        count = fitCount(strip.clientWidth - addButtonWidth - overflowButtonWidth);
       }
       setVisibleCount(Math.max(1, count));
     };
@@ -97,15 +113,18 @@ export function BoardTabBar() {
 
   // Close overflow dropdown on outside click
   useEffect(() => {
-    if (!overflowOpen) return;
+    if (!overflowOpen && !recentOpen) return;
     const handler = (e: globalThis.MouseEvent) => {
       if (!overflowRef.current?.contains(e.target as Node)) {
         setOverflowOpen(false);
       }
+      if (!recentRef.current?.contains(e.target as Node)) {
+        setRecentOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [overflowOpen]);
+  }, [overflowOpen, recentOpen]);
 
   // Close context menu on outside click or Escape
   useEffect(() => {
@@ -135,23 +154,30 @@ export function BoardTabBar() {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  function startRename(board: Board) {
+  function startRename(board: Board, initialValue = board.title) {
     setActiveBoard(board.id);
     setRenamingId(board.id);
-    setRenameValue(board.title);
+    setRenameValue(initialValue);
   }
 
   async function commitRename() {
     if (!renamingId) return;
     const trimmed = renameValue.trim();
+    const board = boards.find((b) => b.id === renamingId);
     if (trimmed) {
+      // "Untitled" is the in-memory placeholder, not real user content.
+      if (board?.ghost && trimmed === "Untitled") {
+        // Leaving the placeholder unchanged commits only the rename UI.
+        // Keep the ghost available so the user can add notes or tasks.
+        setRenamingId(null);
+        return;
+      }
       // Only the active board can be renamed via the tab bar
       if (renamingId === activeBoardId) {
         await renameActiveBoard(trimmed);
       }
     } else {
       // Empty rename on a ghost → close/discard the ghost
-      const board = boards.find((b) => b.id === renamingId);
       if (board?.ghost) {
         await closeBoard(renamingId);
       }
@@ -173,8 +199,10 @@ export function BoardTabBar() {
 
   /** Create a ghost board and enter rename mode — used by both + and "New". */
   function handleNewBoard() {
-    const board = addGhostBoard("New Board");
-    startRename(board);
+    const board = addGhostBoard("Untitled");
+    // Keep the visible Notepad-style placeholder in the input so the tab has
+    // a stable width. It is discarded on blur if the user leaves it unchanged.
+    startRename(board, "Untitled");
   }
 
   function openContextMenu(e: MouseEvent, boardId: string) {
@@ -224,8 +252,23 @@ export function BoardTabBar() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  const visibleBoards = boards.slice(0, visibleCount);
-  const hiddenBoards = boards.slice(visibleCount);
+  // Keep the active board in the main strip. A board selected from the
+  // overflow menu may otherwise remain hidden while the first tab still
+  // appears to be selected.
+  const initialVisibleBoards = boards.slice(0, visibleCount);
+  const activeBoard = boards.find((board) => board.id === activeBoardId);
+  const activeIsVisible = initialVisibleBoards.some(
+    (board) => board.id === activeBoardId,
+  );
+  const visibleBoards =
+    activeBoard && !activeIsVisible && initialVisibleBoards.length > 0
+      ? [
+          ...initialVisibleBoards.slice(0, -1),
+          activeBoard,
+        ]
+      : initialVisibleBoards;
+  const visibleIds = new Set(visibleBoards.map((board) => board.id));
+  const hiddenBoards = boards.filter((board) => !visibleIds.has(board.id));
 
   const confirmTarget = boards.find((b) => b.id === confirmDeleteId);
 
@@ -236,25 +279,54 @@ export function BoardTabBar() {
         className="
           flex items-stretch shrink-0
           bg-neutral-900 border-b border-neutral-800
-          overflow-hidden
+          relative overflow-visible z-10
         "
         style={{ height: "2rem" /* 32px */ }}
       >
+        {/* Keep width mirrors for all boards so resizing can recalculate
+            overflow even when some tabs are not currently rendered visibly. */}
+        <div
+          aria-hidden="true"
+          className="absolute left-0 top-0 invisible pointer-events-none flex"
+        >
+          {boards.map((board) => (
+            <div
+              key={board.id}
+              data-measure-tab
+              className="group relative flex items-center px-3 max-w-[120px] shrink-0 text-xs"
+            >
+              <span className="truncate">{board.title}</span>
+              <span className="ml-1 shrink-0 p-0.5">
+                <FiX className="h-3 w-3" aria-hidden="true" />
+              </span>
+            </div>
+          ))}
+        </div>
+
         {/* ── Visible tabs ──────────────────────────────────────────────── */}
         {visibleBoards.map((board) => {
           const isActive = board.id === activeBoardId;
           const isRenaming = board.id === renamingId;
 
           return (
-            <button
+            <div
               key={board.id}
               data-tab
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={0}
               onClick={() => setActiveBoard(board.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setActiveBoard(board.id);
+                }
+              }}
               onDoubleClick={() => startRename(board)}
               onContextMenu={(e) => openContextMenu(e, board.id)}
               title={board.ghost ? `${board.title} (not yet saved)` : board.title}
               className={`
-                relative flex items-center px-3 max-w-[120px] shrink-0
+                group relative flex items-center px-3 max-w-[120px] shrink-0
                 text-xs truncate transition-colors
                 ${
                   isActive
@@ -282,7 +354,31 @@ export function BoardTabBar() {
                   {board.title}
                 </span>
               )}
-            </button>
+              <button
+                type="button"
+                aria-label={`Close "${board.title}"`}
+                title="Close board"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void closeBoard(board.id);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void closeBoard(board.id);
+                  }
+                }}
+                className="
+                  ml-1 shrink-0 rounded p-0.5 text-neutral-500 opacity-0
+                  transition-opacity hover:bg-neutral-700 hover:text-neutral-100
+                  group-hover:opacity-100 focus:opacity-100
+                "
+              >
+                <FiX className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </div>
           );
         })}
 
@@ -297,7 +393,7 @@ export function BoardTabBar() {
                 hover:bg-neutral-800 transition-colors
               "
             >
-              <span>▾</span>
+              <FiChevronDown aria-hidden="true" />
               <span>{hiddenBoards.length}</span>
             </button>
 
@@ -334,10 +430,7 @@ export function BoardTabBar() {
           </div>
         )}
 
-        {/* ── Spacer ───────────────────────────────────────────────────── */}
-        <div className="flex-1" />
-
-        {/* ── Add board button ──────────────────────────────────────────── */}
+        {/* ── Add board button — browser-style, after the open tabs ─────── */}
         <button
           onClick={handleNewBoard}
           title="New board"
@@ -348,8 +441,57 @@ export function BoardTabBar() {
             hover:bg-neutral-800 transition-colors text-base leading-none
           "
         >
-          +
+          <FiPlus aria-hidden="true" />
         </button>
+
+        <div ref={recentRef} className="relative flex items-center">
+          <button
+            type="button"
+            onClick={() => setRecentOpen((open) => !open)}
+            title="Recently closed boards"
+            aria-label="Recently closed boards"
+            aria-expanded={recentOpen}
+            disabled={recentlyClosed.length === 0}
+            className="
+              flex items-center justify-center w-8 h-full shrink-0
+              text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800
+              transition-colors disabled:opacity-30 disabled:cursor-default
+            "
+          >
+            <FiClock aria-hidden="true" />
+          </button>
+          {recentOpen && recentlyClosed.length > 0 && (
+            <div
+              role="menu"
+              aria-label="Recently closed boards"
+              className="
+                absolute top-full right-0 z-50 min-w-[180px]
+                bg-neutral-800 border border-neutral-700 rounded-md
+                shadow-lg py-1 mt-0.5
+              "
+            >
+              {recentlyClosed.map((board) => (
+                <button
+                  key={board.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    void reopenBoard(board.id);
+                    setRecentOpen(false);
+                  }}
+                  className="
+                    w-full text-left px-3 py-1.5 text-xs text-neutral-300
+                    hover:bg-neutral-700 hover:text-neutral-100 truncate
+                  "
+                >
+                  {board.title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1" />
       </div>
 
       {/* ── Context menu (portal-style, positioned absolutely in viewport) ── */}

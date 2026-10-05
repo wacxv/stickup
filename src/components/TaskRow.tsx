@@ -26,6 +26,7 @@ import {
   NOTIFICATION_LABELS,
 } from "../lib/taskHelpers";
 import { PiRepeatBold, PiPencilSimple } from "react-icons/pi";
+import { FiChevronDown, FiChevronUp, FiX } from "react-icons/fi";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface Props {
@@ -171,13 +172,13 @@ export function TaskRow({
               disabled={isFirst}
               aria-label="Move task up"
               className="p-0.5 text-neutral-600 hover:text-neutral-300 disabled:opacity-20 disabled:cursor-default leading-none"
-            >▴</button>
+            ><FiChevronUp aria-hidden="true" /></button>
             <button
               onClick={() => onMoveDown(task.id)}
               disabled={isLast}
               aria-label="Move task down"
               className="p-0.5 text-neutral-600 hover:text-neutral-300 disabled:opacity-20 disabled:cursor-default leading-none"
-            >▾</button>
+            ><FiChevronDown aria-hidden="true" /></button>
           </div>
         )}
 
@@ -267,7 +268,7 @@ export function TaskRow({
                 transition-colors
               "
             >
-              ✕
+              <FiX aria-hidden="true" />
             </button>
           </div>
         )}

@@ -40,6 +40,8 @@ import { loadIndex, syncIndex } from "../lib/indexIO";
 interface BoardState {
   /** Full board list, sorted by order */
   boards: Board[];
+  /** Saved boards closed during this app session, newest first. */
+  recentlyClosed: Board[];
   /** ID of the currently visible board, or null before load */
   activeBoardId: string | null;
   /** True while the initial load is in progress */
@@ -74,6 +76,7 @@ interface BoardActions {
    * If the board is a ghost it is simply discarded (no disk operation).
    */
   closeBoard(id: string): Promise<void>;
+  reopenBoard(id: string): Promise<void>;
 
   // ── Notes ──────────────────────────────────────────────────────────────────
   saveNotes(boardId: string, notes: string): Promise<void>;
@@ -95,6 +98,7 @@ export type BoardStore = BoardState & BoardActions;
 export const useBoardStore = create<BoardStore>((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────────────
   boards: [],
+  recentlyClosed: [],
   activeBoardId: null,
   loading: false,
   error: null,
@@ -130,6 +134,9 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     set({ activeBoardId: id });
     // Persist the choice to index.json (fire-and-forget — not critical)
     const { boards } = get();
+    const selected = boards.find((board) => board.id === id);
+    // Selecting an in-memory ghost must not create an index entry on disk.
+    if (selected?.ghost) return;
     // Only sync persisted (non-ghost) boards
     const persisted = boards.filter((b) => !b.ghost);
     syncIndex(persisted, id).catch((err) =>
@@ -201,7 +208,11 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const newActiveId =
       activeBoardId === id ? (next[0]?.id ?? null) : activeBoardId;
     await syncIndex(next.filter((b) => !b.ghost), newActiveId);
-    set({ boards: next, activeBoardId: newActiveId });
+    set({
+      boards: next,
+      activeBoardId: newActiveId,
+      recentlyClosed: get().recentlyClosed.filter((b) => b.id !== id),
+    });
   },
 
   async deleteActiveBoard() {
@@ -210,7 +221,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   async closeBoard(id) {
-    const { boards, activeBoardId } = get();
+    const { boards, activeBoardId, recentlyClosed } = get();
     const board = boards.find((b) => b.id === id);
     if (!board) return;
 
@@ -228,7 +239,27 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       await syncIndex(next.filter((b) => !b.ghost), newActiveId);
     }
 
-    set({ boards: next, activeBoardId: newActiveId });
+    set({
+      boards: next,
+      activeBoardId: newActiveId,
+      recentlyClosed: board.ghost
+        ? recentlyClosed
+        : [board, ...recentlyClosed.filter((b) => b.id !== id)],
+    });
+  },
+
+  async reopenBoard(id) {
+    const { boards, recentlyClosed } = get();
+    const board = recentlyClosed.find((candidate) => candidate.id === id);
+    if (!board || boards.some((candidate) => candidate.id === id)) return;
+
+    const next = [...boards, { ...board, order: boards.length }];
+    await syncIndex(next.filter((candidate) => !candidate.ghost), board.id);
+    set({
+      boards: next,
+      activeBoardId: board.id,
+      recentlyClosed: recentlyClosed.filter((candidate) => candidate.id !== id),
+    });
   },
 
   // ── Notes ──────────────────────────────────────────────────────────────────
