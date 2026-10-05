@@ -75,17 +75,27 @@ export function BoardTabBar() {
     if (!strip) return;
 
     const measure = () => {
-      // Reserve ~72px for the overflow button + add button
-      const available = strip.clientWidth - 72;
+      // Measure every board, including tabs currently hidden by overflow.
       const tabEls = Array.from(
-        strip.querySelectorAll<HTMLElement>("[data-tab]"),
+        strip.querySelectorAll<HTMLElement>("[data-measure-tab]"),
       );
-      let used = 0;
-      let count = 0;
-      for (const el of tabEls) {
-        used += el.offsetWidth;
-        if (used > available) break;
-        count++;
+      const addButtonWidth = 32;
+      const overflowButtonWidth = 50;
+
+      function fitCount(available: number) {
+        let used = 0;
+        let count = 0;
+        for (const el of tabEls) {
+          used += el.offsetWidth;
+          if (used > available) break;
+          count++;
+        }
+        return count;
+      }
+
+      let count = fitCount(strip.clientWidth - addButtonWidth);
+      if (count < boards.length) {
+        count = fitCount(strip.clientWidth - addButtonWidth - overflowButtonWidth);
       }
       setVisibleCount(Math.max(1, count));
     };
@@ -145,14 +155,20 @@ export function BoardTabBar() {
   async function commitRename() {
     if (!renamingId) return;
     const trimmed = renameValue.trim();
+    const board = boards.find((b) => b.id === renamingId);
     if (trimmed) {
+      // "Untitled" is the in-memory placeholder, not real user content.
+      if (board?.ghost && trimmed === "Untitled") {
+        await closeBoard(renamingId);
+        setRenamingId(null);
+        return;
+      }
       // Only the active board can be renamed via the tab bar
       if (renamingId === activeBoardId) {
         await renameActiveBoard(trimmed);
       }
     } else {
       // Empty rename on a ghost → close/discard the ghost
-      const board = boards.find((b) => b.id === renamingId);
       if (board?.ghost) {
         await closeBoard(renamingId);
       }
@@ -174,10 +190,10 @@ export function BoardTabBar() {
 
   /** Create a ghost board and enter rename mode — used by both + and "New". */
   function handleNewBoard() {
-    const board = addGhostBoard("New Board");
-    // The display label is only a placeholder. An untouched ghost must not
-    // materialise merely because the rename input loses focus.
-    startRename(board, "");
+    const board = addGhostBoard("Untitled");
+    // Keep the visible Notepad-style placeholder in the input so the tab has
+    // a stable width. It is discarded on blur if the user leaves it unchanged.
+    startRename(board, "Untitled");
   }
 
   function openContextMenu(e: MouseEvent, boardId: string) {
@@ -227,8 +243,23 @@ export function BoardTabBar() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  const visibleBoards = boards.slice(0, visibleCount);
-  const hiddenBoards = boards.slice(visibleCount);
+  // Keep the active board in the main strip. A board selected from the
+  // overflow menu may otherwise remain hidden while the first tab still
+  // appears to be selected.
+  const initialVisibleBoards = boards.slice(0, visibleCount);
+  const activeBoard = boards.find((board) => board.id === activeBoardId);
+  const activeIsVisible = initialVisibleBoards.some(
+    (board) => board.id === activeBoardId,
+  );
+  const visibleBoards =
+    activeBoard && !activeIsVisible && initialVisibleBoards.length > 0
+      ? [
+          ...initialVisibleBoards.slice(0, -1),
+          activeBoard,
+        ]
+      : initialVisibleBoards;
+  const visibleIds = new Set(visibleBoards.map((board) => board.id));
+  const hiddenBoards = boards.filter((board) => !visibleIds.has(board.id));
 
   const confirmTarget = boards.find((b) => b.id === confirmDeleteId);
 
@@ -239,10 +270,30 @@ export function BoardTabBar() {
         className="
           flex items-stretch shrink-0
           bg-neutral-900 border-b border-neutral-800
-          overflow-hidden
+          relative overflow-visible z-10
         "
         style={{ height: "2rem" /* 32px */ }}
       >
+        {/* Keep width mirrors for all boards so resizing can recalculate
+            overflow even when some tabs are not currently rendered visibly. */}
+        <div
+          aria-hidden="true"
+          className="absolute left-0 top-0 invisible pointer-events-none flex"
+        >
+          {boards.map((board) => (
+            <div
+              key={board.id}
+              data-measure-tab
+              className="group relative flex items-center px-3 max-w-[120px] shrink-0 text-xs"
+            >
+              <span className="truncate">{board.title}</span>
+              <span className="ml-1 shrink-0 p-0.5">
+                <FiX className="h-3 w-3" aria-hidden="true" />
+              </span>
+            </div>
+          ))}
+        </div>
+
         {/* ── Visible tabs ──────────────────────────────────────────────── */}
         {visibleBoards.map((board) => {
           const isActive = board.id === activeBoardId;

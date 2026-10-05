@@ -19,7 +19,7 @@ export interface Board {
   notes: string;
   /**
    * When true this board exists only in memory and has not yet been written to
-   * disk.  Any real mutation (rename away from "New Board", notes edit, task
+   * disk.  Any real mutation (rename away from "Untitled", notes edit, task
    * add) must first materialise the file before proceeding.  If the board is
    * closed/abandoned while still a ghost, nothing is written to disk.
    */

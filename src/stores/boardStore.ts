@@ -130,6 +130,9 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     set({ activeBoardId: id });
     // Persist the choice to index.json (fire-and-forget — not critical)
     const { boards } = get();
+    const selected = boards.find((board) => board.id === id);
+    // Selecting an in-memory ghost must not create an index entry on disk.
+    if (selected?.ghost) return;
     // Only sync persisted (non-ghost) boards
     const persisted = boards.filter((b) => !b.ghost);
     syncIndex(persisted, id).catch((err) =>
