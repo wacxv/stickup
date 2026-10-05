@@ -179,10 +179,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       source = await materialiseBoard(source);
     }
 
-    const existingSlugs = boards
-      .filter((b) => b.id !== source.id)
-      .map((b) => b.slug);
-    const renamed = await renameBoard(source, newTitle, existingSlugs);
+    const renamed = await renameBoard(source, newTitle);
     const next = boards.map((b) => (b.id === renamed.id ? renamed : b));
     await syncIndex(next.filter((b) => !b.ghost), activeBoardId);
     set({ boards: next });

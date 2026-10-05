@@ -56,6 +56,7 @@ export function BoardTabBar() {
   // ── Inline rename state ──────────────────────────────────────────────────
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   // ── Overflow detection ───────────────────────────────────────────────────
@@ -158,6 +159,7 @@ export function BoardTabBar() {
     setActiveBoard(board.id);
     setRenamingId(board.id);
     setRenameValue(initialValue);
+    setRenameError(null);
   }
 
   async function commitRename() {
@@ -174,7 +176,16 @@ export function BoardTabBar() {
       }
       // Only the active board can be renamed via the tab bar
       if (renamingId === activeBoardId) {
-        await renameActiveBoard(trimmed);
+        try {
+          await renameActiveBoard(trimmed);
+        } catch (err) {
+          setRenameError(
+            err instanceof Error
+              ? err.message
+              : `Unable to rename "${trimmed}".`,
+          );
+          return;
+        }
       }
     } else {
       // Empty rename on a ghost → close/discard the ghost
@@ -183,6 +194,7 @@ export function BoardTabBar() {
       }
     }
     setRenamingId(null);
+    setRenameError(null);
   }
 
   function handleRenameKey(e: KeyboardEvent<HTMLInputElement>) {
@@ -336,19 +348,29 @@ export function BoardTabBar() {
               `}
             >
               {isRenaming ? (
-                <input
-                  ref={renameInputRef}
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={handleRenameKey}
-                  onClick={(e) => e.stopPropagation()}
-                  className="
-                    w-full bg-neutral-800 text-neutral-100 text-xs
-                    border border-indigo-500 rounded px-1 outline-none
-                    min-w-0
-                  "
-                />
+                <>
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={handleRenameKey}
+                    onClick={(e) => e.stopPropagation()}
+                    className="
+                      w-full bg-neutral-800 text-neutral-100 text-xs
+                      border border-indigo-500 rounded px-1 outline-none
+                      min-w-0
+                    "
+                  />
+                  {renameError && (
+                    <span
+                      role="alert"
+                      className="absolute top-full left-0 z-20 mt-1 w-48 rounded border border-red-800 bg-neutral-900 px-2 py-1 text-[10px] leading-tight text-red-300 shadow-lg"
+                    >
+                      {renameError}
+                    </span>
+                  )}
+                </>
               ) : (
                 <span className={`truncate ${board.ghost ? "italic opacity-70" : ""}`}>
                   {board.title}
