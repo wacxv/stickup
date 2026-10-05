@@ -1,4 +1,5 @@
 import { useBoardStore } from "../stores/boardStore";
+import { GoPin } from "react-icons/go";
 
 /**
  * Shown on first-ever launch when there are no boards yet.
@@ -12,7 +13,7 @@ export function WelcomeScreen() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center select-none">
-      <div className="text-4xl">📌</div>
+      <GoPin className="text-4xl text-indigo-400" aria-hidden="true" />
       <h1 className="text-base font-semibold text-neutral-100">
         Welcome to StickUp
       </h1>
