@@ -99,7 +99,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-0.5 px-2 py-1 border-b border-neutral-800 shrink-0">
+      <div className="notes-toolbar flex items-center gap-0.5 px-2 py-1 border-b border-neutral-800 shrink-0">
         {TOOLBAR.map((item) => (
           <button
             key={item.title}
@@ -110,7 +110,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
               handleToolbar(item.action);
             }}
             className="
-              @[400px]/app:inline-flex hidden
+              toolbar-inline
               px-1.5 py-0.5 rounded text-xs text-neutral-400
               hover:text-neutral-100 hover:bg-neutral-800
               transition-colors font-mono select-none
@@ -119,7 +119,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
             {item.label}
           </button>
         ))}
-        <div ref={moreMenuRef} className="@[400px]/app:hidden relative">
+        <div ref={moreMenuRef} className="toolbar-overflow relative">
           <button
             type="button"
             title="More formatting tools"
@@ -140,11 +140,11 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
               role="menu"
               aria-label="More formatting tools"
               className="
-                absolute top-full right-0 z-20 mt-1 min-w-[150px] p-1
+                absolute top-full left-0 z-50 mt-1 min-w-[180px] max-w-[calc(100vw-1rem)] p-1
                 bg-neutral-800 border border-neutral-700 rounded-md shadow-xl
               "
             >
-              {TOOLBAR.slice(8).map((item) => (
+              {TOOLBAR.map((item) => (
                 <button
                   key={item.title}
                   type="button"
