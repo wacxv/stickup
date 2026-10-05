@@ -21,6 +21,7 @@ import type { NotificationMode } from "../types/task";
 import type { StartupVisibility } from "../types/settings";
 import { ensureNotificationPermission } from "../lib/notificationService";
 import { triggerBackgroundTimer } from "../lib/backgroundTimer";
+import { FiX } from "react-icons/fi";
 
 interface Props {
   onClose: () => void;
@@ -84,7 +85,7 @@ export function SettingsPane({ onClose }: Props) {
           aria-label="Close settings"
           className="titlebar-btn text-neutral-400 hover:text-neutral-100"
         >
-          ✕
+          <FiX aria-hidden="true" />
         </button>
       </div>
 

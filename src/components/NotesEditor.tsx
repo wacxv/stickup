@@ -10,7 +10,23 @@
  *   headings, links, tables, and fenced code blocks.
  */
 
-import { useRef, useCallback, type KeyboardEvent } from "react";
+import {
+  useRef,
+  useCallback,
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import {
+  FiCheckSquare,
+  FiCode,
+  FiCornerDownRight,
+  FiGrid,
+  FiLink,
+  FiList,
+  FiMoreHorizontal,
+} from "react-icons/fi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +39,7 @@ interface Props {
 // ─── Toolbar button descriptor ────────────────────────────────────────────────
 
 interface ToolbarItem {
-  label: string;
+  label: ReactNode;
   title: string;
   action: (
     textarea: HTMLTextAreaElement,
@@ -36,6 +52,8 @@ interface ToolbarItem {
 
 export function NotesEditor({ value, onChange, placeholder }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const handleToolbar = useCallback(
     (action: ToolbarItem["action"]) => {
@@ -47,6 +65,19 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
     },
     [value, onChange],
   );
+
+  useEffect(() => {
+    if (!moreOpen) return;
+
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (!moreMenuRef.current?.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [moreOpen]);
 
   // Tab key inserts two spaces instead of moving focus
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -71,7 +102,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
       <div className="flex items-center gap-0.5 px-2 py-1 border-b border-neutral-800 shrink-0">
         {TOOLBAR.map((item) => (
           <button
-            key={item.label}
+            key={item.title}
             title={item.title}
             onMouseDown={(e) => {
               // Prevent textarea from losing focus
@@ -79,6 +110,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
               handleToolbar(item.action);
             }}
             className="
+              @[400px]/app:inline-flex hidden
               px-1.5 py-0.5 rounded text-xs text-neutral-400
               hover:text-neutral-100 hover:bg-neutral-800
               transition-colors font-mono select-none
@@ -87,6 +119,54 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
             {item.label}
           </button>
         ))}
+        <div ref={moreMenuRef} className="@[400px]/app:hidden relative">
+          <button
+            type="button"
+            title="More formatting tools"
+            aria-label="More formatting tools"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((open) => !open)}
+            className="
+              inline-flex items-center justify-center px-1.5 py-0.5
+              rounded text-xs text-neutral-400
+              hover:text-neutral-100 hover:bg-neutral-800
+              transition-colors
+            "
+          >
+            <FiMoreHorizontal aria-hidden="true" />
+          </button>
+          {moreOpen && (
+            <div
+              role="menu"
+              aria-label="More formatting tools"
+              className="
+                absolute top-full right-0 z-20 mt-1 min-w-[150px] p-1
+                bg-neutral-800 border border-neutral-700 rounded-md shadow-xl
+              "
+            >
+              {TOOLBAR.slice(8).map((item) => (
+                <button
+                  key={item.title}
+                  type="button"
+                  role="menuitem"
+                  title={item.title}
+                  onClick={() => {
+                    handleToolbar(item.action);
+                    setMoreOpen(false);
+                  }}
+                  className="
+                    flex items-center gap-2 w-full px-2 py-1.5 rounded
+                    text-left text-xs text-neutral-300
+                    hover:bg-neutral-700 hover:text-neutral-100
+                  "
+                >
+                  <span className="inline-flex w-4 justify-center">{item.label}</span>
+                  <span>{item.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Textarea ─────────────────────────────────────────────────────── */}
@@ -133,22 +213,22 @@ const TOOLBAR: ToolbarItem[] = [
     action: (ta, val, set) => wrapSelection(ta, val, set, "~~", "~~", "struck text"),
   },
   {
-    label: "•",
+    label: <FiList aria-hidden="true" />,
     title: "Unordered list",
     action: (ta, val, set) => toggleLines(ta, val, set, /^- /, "- "),
   },
   {
-    label: "1.",
+    label: <span aria-hidden="true">1.</span>,
     title: "Ordered list",
     action: (ta, val, set) => toggleNumberedLines(ta, val, set),
   },
   {
-    label: "☐",
+    label: <FiCheckSquare aria-hidden="true" />,
     title: "Task checkbox",
     action: (ta, val, set) => toggleLines(ta, val, set, /^- \[[ xX]\] /, "- [ ] "),
   },
   {
-    label: "❯",
+    label: <FiCornerDownRight aria-hidden="true" />,
     title: "Blockquote",
     action: (ta, val, set) => toggleLines(ta, val, set, /^> /, "> "),
   },
@@ -158,17 +238,17 @@ const TOOLBAR: ToolbarItem[] = [
     action: (ta, val, set) => cycleHeading(ta, val, set),
   },
   {
-    label: "↗",
+    label: <FiLink aria-hidden="true" />,
     title: "Link ([text](url))",
     action: (ta, val, set) => insertLink(ta, val, set),
   },
   {
-    label: "▦",
+    label: <FiGrid aria-hidden="true" />,
     title: "Table",
     action: (ta, val, set) => insertTable(ta, val, set),
   },
   {
-    label: "</>",
+    label: <FiCode aria-hidden="true" />,
     title: "Code block",
     action: (ta, val, set) => insertCodeBlock(ta, val, set),
   },

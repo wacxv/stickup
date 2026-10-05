@@ -10,6 +10,7 @@ import type { Board } from "../types/board";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { storagePath } from "../lib/storage";
+import { FiChevronDown, FiPlus, FiX } from "react-icons/fi";
 
 /**
  * BoardTabBar
@@ -77,7 +78,7 @@ export function BoardTabBar() {
       // Reserve ~72px for the overflow button + add button
       const available = strip.clientWidth - 72;
       const tabEls = Array.from(
-        strip.querySelectorAll<HTMLButtonElement>("[data-tab]"),
+        strip.querySelectorAll<HTMLElement>("[data-tab]"),
       );
       let used = 0;
       let count = 0;
@@ -135,10 +136,10 @@ export function BoardTabBar() {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  function startRename(board: Board) {
+  function startRename(board: Board, initialValue = board.title) {
     setActiveBoard(board.id);
     setRenamingId(board.id);
-    setRenameValue(board.title);
+    setRenameValue(initialValue);
   }
 
   async function commitRename() {
@@ -174,7 +175,9 @@ export function BoardTabBar() {
   /** Create a ghost board and enter rename mode — used by both + and "New". */
   function handleNewBoard() {
     const board = addGhostBoard("New Board");
-    startRename(board);
+    // The display label is only a placeholder. An untouched ghost must not
+    // materialise merely because the rename input loses focus.
+    startRename(board, "");
   }
 
   function openContextMenu(e: MouseEvent, boardId: string) {
@@ -246,15 +249,24 @@ export function BoardTabBar() {
           const isRenaming = board.id === renamingId;
 
           return (
-            <button
+            <div
               key={board.id}
               data-tab
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={0}
               onClick={() => setActiveBoard(board.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setActiveBoard(board.id);
+                }
+              }}
               onDoubleClick={() => startRename(board)}
               onContextMenu={(e) => openContextMenu(e, board.id)}
               title={board.ghost ? `${board.title} (not yet saved)` : board.title}
               className={`
-                relative flex items-center px-3 max-w-[120px] shrink-0
+                group relative flex items-center px-3 max-w-[120px] shrink-0
                 text-xs truncate transition-colors
                 ${
                   isActive
@@ -282,7 +294,31 @@ export function BoardTabBar() {
                   {board.title}
                 </span>
               )}
-            </button>
+              <button
+                type="button"
+                aria-label={`Close "${board.title}"`}
+                title="Close board"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void closeBoard(board.id);
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void closeBoard(board.id);
+                  }
+                }}
+                className="
+                  ml-1 shrink-0 rounded p-0.5 text-neutral-500 opacity-0
+                  transition-opacity hover:bg-neutral-700 hover:text-neutral-100
+                  group-hover:opacity-100 focus:opacity-100
+                "
+              >
+                <FiX className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </div>
           );
         })}
 
@@ -297,7 +333,7 @@ export function BoardTabBar() {
                 hover:bg-neutral-800 transition-colors
               "
             >
-              <span>▾</span>
+              <FiChevronDown aria-hidden="true" />
               <span>{hiddenBoards.length}</span>
             </button>
 
@@ -334,10 +370,7 @@ export function BoardTabBar() {
           </div>
         )}
 
-        {/* ── Spacer ───────────────────────────────────────────────────── */}
-        <div className="flex-1" />
-
-        {/* ── Add board button ──────────────────────────────────────────── */}
+        {/* ── Add board button — browser-style, after the open tabs ─────── */}
         <button
           onClick={handleNewBoard}
           title="New board"
@@ -348,8 +381,10 @@ export function BoardTabBar() {
             hover:bg-neutral-800 transition-colors text-base leading-none
           "
         >
-          +
+          <FiPlus aria-hidden="true" />
         </button>
+
+        <div className="flex-1" />
       </div>
 
       {/* ── Context menu (portal-style, positioned absolutely in viewport) ── */}

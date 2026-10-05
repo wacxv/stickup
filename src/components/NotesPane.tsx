@@ -15,6 +15,7 @@ import { NotesPreview } from "./NotesPreview";
 import { useBoardStore } from "../stores/boardStore";
 import { useDebounce } from "../lib/useDebounce";
 import type { Board } from "../types/board";
+import { FiFileText } from "react-icons/fi";
 
 interface Props {
   board: Board;
@@ -92,7 +93,7 @@ export function NotesPane({ board }: Props) {
 function EmptyNotesState({ onEdit }: { onEdit: () => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-2 p-4 text-center select-none">
-      <span className="text-2xl opacity-40">📄</span>
+      <FiFileText className="text-2xl opacity-40" aria-hidden="true" />
       <p className="text-xs text-neutral-500">No notes yet.</p>
       <button
         onClick={onEdit}
