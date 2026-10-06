@@ -9,7 +9,7 @@
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38B2AC?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)](LICENSE)
 
 <br />
 
@@ -85,4 +85,4 @@ StickUp is currently under active development towards its **v1.0.0** release.
 
 ## 📄 License
 
-This project is proprietary and confidential. See the [LICENSE](LICENSE) file for viewing rights and usage restrictions.
+This project is licensed under the [GNU General Public License v3.0 or later](LICENSE).
