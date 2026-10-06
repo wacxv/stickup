@@ -188,7 +188,7 @@ export function TaskRow({
           checked={task.completed}
           onChange={toggleComplete}
           aria-label={`Mark "${task.title}" as ${task.completed ? "incomplete" : "complete"}`}
-          className="shrink-0 accent-indigo-500 cursor-pointer w-3.5 h-3.5"
+          className="task-checkbox shrink-0 accent-indigo-500 cursor-pointer w-4 h-4"
         />
 
         {/* Priority dot */}

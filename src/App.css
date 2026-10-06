@@ -10,6 +10,128 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Theme native scrollbars ────────────────────────────────────────────── */
+* {
+  scrollbar-color: #3a3944 #101012;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #101012;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #3a3944;
+  border: 2px solid #101012;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #8b7aff;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #101012;
+}
+
+/* ── StickUp graphite palette ───────────────────────────────────────────── */
+:root {
+  --graphite-background: #101012;
+  --graphite-surface: #202024;
+  --graphite-text: #ececf1;
+  --graphite-muted: #96969f;
+  --stickup-accent: #8b7aff;
+  --priority-high: #f77580;
+  --priority-standard: #66bef1;
+  --priority-low: #60d8af;
+}
+
+body,
+.bg-neutral-950 { background-color: var(--graphite-background); }
+.bg-neutral-900 { background-color: var(--graphite-surface); }
+.bg-neutral-800 { background-color: #29292f; }
+.bg-neutral-700 { background-color: #35353d; }
+.text-neutral-100,
+.text-neutral-200 { color: var(--graphite-text); }
+.text-neutral-300,
+.text-neutral-400,
+.text-neutral-500,
+.text-neutral-600 { color: var(--graphite-muted); }
+.border-neutral-800,
+.border-neutral-800\/60,
+.border-neutral-800\/40,
+.border-neutral-700 { border-color: #34343b; }
+.text-indigo-300,
+.text-indigo-400,
+.text-indigo-500 { color: var(--stickup-accent); }
+.bg-indigo-600,
+.bg-indigo-600\/30,
+.bg-indigo-600\/40,
+.bg-indigo-600\/50 { background-color: color-mix(in srgb, var(--stickup-accent) 32%, transparent); }
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-600:hover { background-color: color-mix(in srgb, var(--stickup-accent) 78%, #101012); }
+.border-indigo-500,
+.focus\:border-indigo-500:focus { border-color: var(--stickup-accent); }
+.accent-indigo-500 { accent-color: var(--stickup-accent); }
+
+.priority-high { color: var(--priority-high); }
+.priority-standard { color: var(--priority-standard); }
+.priority-low { color: var(--priority-low); }
+
+.segmented-group {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-self: flex-start;
+  overflow: hidden;
+  border: 1px solid #3a3944;
+  border-radius: 0.375rem;
+  background: #18181c;
+}
+.segmented-group > button {
+  border-radius: 0;
+  border-right: 1px solid #3a3944;
+}
+.segmented-group > button:last-child { border-right: 0; }
+.segmented-group > button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--stickup-accent);
+  outline-offset: -2px;
+}
+
+.toolbar-overflow-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.toolbar-overflow-item {
+  min-height: 1.75rem;
+  line-height: 1.25rem;
+}
+.toolbar-overflow-item:hover {
+  background: color-mix(in srgb, var(--stickup-accent) 18%, #29292f);
+}
+.toolbar-overflow-icon {
+  color: var(--stickup-accent);
+  font-weight: 600;
+}
+.segmented-group > button.bg-indigo-600\/40,
+.segmented-group > button.bg-indigo-600\/50 {
+  background: color-mix(in srgb, var(--stickup-accent) 32%, transparent);
+  color: var(--graphite-text);
+}
+
+.task-checkbox {
+  transform: scale(1.08);
+  transform-origin: center;
+}
+
 /*
  * ── Container query breakpoint strategy ──────────────────────────────────
  *
@@ -30,6 +152,16 @@ body {
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  user-select: none;
+}
+
+/* Keep text selection available where users edit or read content. */
+input,
+textarea,
+select,
+[contenteditable="true"],
+.prose {
+  user-select: text;
 }
 
 /* The notes pane can be half the window at medium widths, so toolbar

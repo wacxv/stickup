@@ -90,7 +90,7 @@ export function SettingsPane({ onClose }: Props) {
       </div>
 
       {/* ── Body ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
 
         {/* ── Startup ─────────────────────────────────────────────────── */}
         <Section title="Startup">
@@ -102,6 +102,7 @@ export function SettingsPane({ onClose }: Props) {
           />
           <RadioGroup<StartupVisibility>
             label="Window on launch"
+            description="Choose whether StickUp opens visibly or stays in the tray"
             value={draft.startupVisibility}
             onChange={(v) => patch("startupVisibility", v)}
             options={[
@@ -250,7 +251,7 @@ function RadioGroup<T>({
           {description}
         </span>
       )}
-      <div className="flex flex-wrap gap-1.5 mt-0.5">
+      <div className="segmented-group mt-0.5">
         {options.map((opt, i) => (
           <button
             key={i}
