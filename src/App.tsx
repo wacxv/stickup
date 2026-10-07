@@ -53,7 +53,10 @@ function App() {
 
   return (
     // position:relative so SettingsPane (absolute) fills this container
-    <div className="relative flex flex-col h-full bg-neutral-950 text-neutral-100 overflow-hidden">
+    <div
+      className="relative flex flex-col h-full bg-neutral-950 text-neutral-100 overflow-hidden"
+      onContextMenu={(event) => event.preventDefault()}
+    >
       <TitleBar onSettingsOpen={() => setSettingsOpen(true)} />
 
       {loading ? (
