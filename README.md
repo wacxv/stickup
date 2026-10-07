@@ -4,7 +4,7 @@
 
 ### *Sticky notes that actually know what's due.*
 
-[![Status: In Development](https://img.shields.io/badge/Status-In%20Development-orange)](https://github.com/wacxv/stickup)
+[![Release: v1.0.0](https://img.shields.io/badge/Release-v1.0.0-brightgreen)](https://github.com/wacxv/stickup/releases)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -13,7 +13,7 @@
 
 <br />
 
-<img src="src/assets/StickUp_Screenshot.png" alt="StickUp App Preview" width="680" />
+<img src="src/assets/stickup-ui.svg" alt="StickUp App Preview" width="680" />
 
 </div>
 
@@ -35,30 +35,16 @@ Most note-taking tools either clutter your desktop, force you to Alt-Tab away fr
 
 ---
 
-## ⚡ Why StickUp?
-
-| Feature | Notepad | Notion | **StickUp!** |
-| :--- | :---: | :---: | :---: |
-| **Due Dates & Recurrences** | ❌ No | ✅ Yes | **✅ Yes** |
-| **Native Toast Notifications** | ❌ No | ❌ (Email / In-app) | **✅ Yes (Gentle & Nag)** |
-| **Lightweight & Simple** | ✅ Yes | ❌ No | **✅ Yes** |
-| **No Account / Sign-up Needed** | ✅ Yes | ❌ No | **✅ Yes** |
-| **Local-First & Private** | ✅ Yes | ❌ No | **✅ Yes** |
-| **Always-on-Top / Pin to Screen** | ❌ No | ❌ No | **✅ Yes** |
-| **Per-Board Tab Organization** | ❌ No | ✅ Complex | **✅ Streamlined** |
-
----
-
 ## ✨ Key Features
 
-- 📝 **Markdown-Powered Scratchpad**: Rich text support including headers, bold, italics, strikethrough, blockquotes, checklists, and fenced code blocks with syntax highlighting.
+- 📝 **Markdown-Powered Scratchpad**: Rich text support including headers, bold, italics, strikethrough, blockquotes, checklists, tables, and fenced code blocks with syntax highlighting.
 - ⏰ **Deadlines & Recurring Routines**: Schedule due dates and times with automatic reset logic for daily and weekly recurring tasks.
 - 🔔 **Native Windows Toast Notifications**: Background due-date alerts via native Windows toasts, featuring two distinct modes:
   - **Gentle Mode**: Alerts you once within your custom lead time.
   - **Nag Mode**: Persistently repeats reminders at set intervals until you check the task off.
 - 🎯 **Priority & Filter Controls**: Prioritize tasks (`High`, `Normal`, `Low`) and quickly filter by due date, recurrence, or priority.
 - 📌 **Always-on-Top Pin**: Toggle pin mode to keep StickUp floating comfortably above your active IDE, browser, or documents.
-- 🗂️ **Per-Board Tab Organization**: Switch contexts instantly across tabbed boards with scoped notes and task lists.
+- 🗂️ **Per-Board Tab Organization**: Switch contexts instantly across tabbed boards with scoped notes and task lists. Includes an in-memory recently closed board recovery list.
 - 🎛️ **Tray-Resident & Autostart**: Closing the window hides it to the system tray so background notification timers remain active; optional launch on Windows startup.
 - 📐 **Adaptive Two-Pane Layout**: Seamlessly transitions from a compact single-column scratchpad (with a quick Notes/Tasks toggle) to a wide side-by-side view.
 - 🔒 **Simple & Local-First by Design**:
@@ -77,9 +63,11 @@ Most note-taking tools either clutter your desktop, force you to Alt-Tab away fr
 
 ---
 
-## 🚧 Status
+## 🚀 Status
 
-StickUp is currently under active development towards its **v1.0.0** release.
+**v1.0.0 is officially released!** 🎉
+
+StickUp is stable, local-first, and ready for daily use. Check out our [Releases page](https://github.com/wacxv/stickup/releases) to download the latest executable.
 
 ---
 
