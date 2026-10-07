@@ -35,7 +35,6 @@ export function TitleBar({ onSettingsOpen }: Props) {
         bg-neutral-900 text-neutral-300
       "
     >
-      {/* App name / drag target */}
       <span
         data-tauri-drag-region
         className="flex-1 text-xs font-semibold tracking-widest uppercase pl-1 cursor-default"

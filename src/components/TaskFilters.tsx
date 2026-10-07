@@ -53,7 +53,7 @@ export function TaskFilters({
     <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-neutral-800">
 
       {/* ── Inline chips — hidden at narrow ─────────────────────────── */}
-      <div className="@[400px]/app:flex hidden items-center gap-1 flex-wrap">
+      <div className="@[400px]/app:flex hidden items-center gap-2 flex-wrap">
         <FilterChips
           sortByDue={sortByDue}
           onSortByDue={onSortByDue}
@@ -127,33 +127,35 @@ function FilterChips({
   return (
     <>
       {/* Sort by due */}
-      <Chip
-        active={sortByDue}
-        onClick={() => onSortByDue(!sortByDue)}
-        label="Sort: due"
-      />
-
-      {/* Priority filter */}
-      {(["all", "high", "standard", "low"] as FilterPriority[]).map((p) => (
+      <div className="segmented-group" role="group" aria-label="Task sorting">
         <Chip
-          key={p}
-          active={filterPriority === p}
-          onClick={() => onFilterPriority(p)}
-          label={p === "all" ? "All" : PRIORITY_LABELS[p as Priority]}
+          active={sortByDue}
+          onClick={() => onSortByDue(!sortByDue)}
+          label="Sort: due"
         />
-      ))}
+      </div>
 
-      <span className="text-neutral-700 select-none">│</span>
+      <div className="segmented-group" role="group" aria-label="Priority filter">
+        {(["all", "high", "standard", "low"] as FilterPriority[]).map((p) => (
+          <Chip
+            key={p}
+            active={filterPriority === p}
+            onClick={() => onFilterPriority(p)}
+            label={p === "all" ? "All" : PRIORITY_LABELS[p as Priority]}
+          />
+        ))}
+      </div>
 
-      {/* Recurrence filter */}
-      {(["all", "none", "daily", "weekly"] as FilterRecurrence[]).map((r) => (
-        <Chip
-          key={r}
-          active={filterRecurrence === r}
-          onClick={() => onFilterRecurrence(r)}
-          label={r === "all" ? "Any" : RECURRENCE_LABELS[r as Recurrence]}
-        />
-      ))}
+      <div className="segmented-group" role="group" aria-label="Recurrence filter">
+        {(["all", "none", "daily", "weekly"] as FilterRecurrence[]).map((r) => (
+          <Chip
+            key={r}
+            active={filterRecurrence === r}
+            onClick={() => onFilterRecurrence(r)}
+            label={r === "all" ? "Any" : RECURRENCE_LABELS[r as Recurrence]}
+          />
+        ))}
+      </div>
     </>
   );
 }
@@ -171,7 +173,7 @@ function Chip({
     <button
       onClick={onClick}
       className={`
-        text-[10px] px-2 py-0.5 rounded-full transition-colors
+        text-[10px] px-2 py-0.5 transition-colors
         ${active
           ? "bg-indigo-600/40 text-indigo-300 ring-1 ring-indigo-500/50"
           : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"}

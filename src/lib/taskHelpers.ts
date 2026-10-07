@@ -164,9 +164,9 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 };
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
-  high: "text-red-400",
-  standard: "text-sky-400",
-  low: "text-emerald-500",
+  high: "priority-high",
+  standard: "priority-standard",
+  low: "priority-low",
 };
 
 export const RECURRENCE_LABELS: Record<Recurrence, string> = {

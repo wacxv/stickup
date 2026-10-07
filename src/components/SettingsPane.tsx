@@ -21,6 +21,8 @@ import type { NotificationMode } from "../types/task";
 import type { StartupVisibility } from "../types/settings";
 import { ensureNotificationPermission } from "../lib/notificationService";
 import { triggerBackgroundTimer } from "../lib/backgroundTimer";
+import { checkForUpdates, RELEASES_URL } from "../lib/updateCheck";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { FiX } from "react-icons/fi";
 
 interface Props {
@@ -33,6 +35,10 @@ export function SettingsPane({ onClose }: Props) {
   // Local draft state so we don't write on every keystroke
   const [draft, setDraft] = useState({ ...settings });
   const [saving, setSaving] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<
+    "idle" | "checking" | "available" | "up-to-date" | "no-releases" | "error"
+  >("idle");
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
 
   async function handleSave() {
     setSaving(true);
@@ -55,6 +61,21 @@ export function SettingsPane({ onClose }: Props) {
     } finally {
       setSaving(false);
       onClose();
+    }
+  }
+
+  async function handleCheckForUpdates() {
+    setUpdateStatus("checking");
+    setLatestVersion(null);
+    try {
+      const result = await checkForUpdates();
+      setUpdateStatus(
+        result.status === "no-releases" ? "no-releases" : result.status,
+      );
+      if (result.status !== "no-releases") setLatestVersion(result.version);
+    } catch (error) {
+      console.error("[SettingsPane] update check failed:", error);
+      setUpdateStatus("error");
     }
   }
 
@@ -90,7 +111,7 @@ export function SettingsPane({ onClose }: Props) {
       </div>
 
       {/* ── Body ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
 
         {/* ── Startup ─────────────────────────────────────────────────── */}
         <Section title="Startup">
@@ -102,6 +123,7 @@ export function SettingsPane({ onClose }: Props) {
           />
           <RadioGroup<StartupVisibility>
             label="Window on launch"
+            description="Choose whether StickUp opens visibly or stays in the tray"
             value={draft.startupVisibility}
             onChange={(v) => patch("startupVisibility", v)}
             options={[
@@ -140,6 +162,42 @@ export function SettingsPane({ onClose }: Props) {
             max={120}
             onChange={(v) => patch("nagIntervalMinutes", v)}
           />
+        </Section>
+
+        <Section title="Updates">
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleCheckForUpdates}
+              disabled={updateStatus === "checking"}
+              className="self-start text-xs px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-neutral-200 transition-colors"
+            >
+              {updateStatus === "checking" ? "Checking…" : "Check for updates"}
+            </button>
+            {updateStatus === "available" && latestVersion && (
+              <p className="text-[10px] text-emerald-400">
+                Update available ({latestVersion}).{" "}
+                <button
+                  onClick={() => openUrl(RELEASES_URL)}
+                  className="underline hover:text-emerald-300"
+                >
+                  View releases
+                </button>
+              </p>
+            )}
+            {updateStatus === "up-to-date" && (
+              <p className="text-[10px] text-neutral-400">You’re up to date.</p>
+            )}
+            {updateStatus === "no-releases" && (
+              <p className="text-[10px] text-neutral-400">
+                No releases published yet.
+              </p>
+            )}
+            {updateStatus === "error" && (
+              <p className="text-[10px] text-rose-400">
+                Couldn’t check for updates. Please try again later.
+              </p>
+            )}
+          </div>
         </Section>
 
       </div>
@@ -250,7 +308,7 @@ function RadioGroup<T>({
           {description}
         </span>
       )}
-      <div className="flex flex-wrap gap-1.5 mt-0.5">
+      <div className="segmented-group mt-0.5">
         {options.map((opt, i) => (
           <button
             key={i}

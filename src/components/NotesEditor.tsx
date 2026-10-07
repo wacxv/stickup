@@ -140,7 +140,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
               role="menu"
               aria-label="More formatting tools"
               className="
-                absolute top-full left-0 z-50 mt-1 min-w-[180px] max-w-[calc(100vw-1rem)] p-1
+                toolbar-overflow-menu absolute top-full left-0 z-50 mt-1 min-w-[180px] max-w-[calc(100vw-1rem)] p-1
                 bg-neutral-800 border border-neutral-700 rounded-md shadow-xl
               "
             >
@@ -155,13 +155,13 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
                     setMoreOpen(false);
                   }}
                   className="
-                    flex items-center gap-2 w-full px-2 py-1.5 rounded
+                    toolbar-overflow-item flex items-center gap-2 w-full px-2 py-1.5 rounded
                     text-left text-xs text-neutral-300
                     hover:bg-neutral-700 hover:text-neutral-100
                   "
                 >
-                  <span className="inline-flex w-4 justify-center">{item.label}</span>
-                  <span>{item.title}</span>
+                  <span className="toolbar-overflow-icon inline-flex w-5 shrink-0 justify-center">{item.label}</span>
+                  <span className="toolbar-overflow-label min-w-0 flex-1 truncate">{item.title}</span>
                 </button>
               ))}
             </div>
