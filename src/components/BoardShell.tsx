@@ -2,10 +2,23 @@ import { useState } from "react";
 import { useBoardStore, selectActiveBoard } from "../stores/boardStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import type { LastOpenPane } from "../types/settings";
+import type { FilterPriority, FilterRecurrence } from "../lib/taskHelpers";
 import { NotesPane } from "./NotesPane";
 import { TasksPane } from "./TasksPane";
 
 type Pane = LastOpenPane;
+
+interface BoardFilterState {
+  sortByDue: boolean;
+  filterPriority: FilterPriority;
+  filterRecurrence: FilterRecurrence;
+}
+
+const DEFAULT_FILTER_STATE: BoardFilterState = {
+  sortByDue: false,
+  filterPriority: "all",
+  filterRecurrence: "all",
+};
 
 /**
  * BoardShell
@@ -18,6 +31,9 @@ export function BoardShell() {
   const board = useBoardStore(selectActiveBoard);
   const { settings, updateSettings } = useSettingsStore();
   const [activePane, setActivePane] = useState<Pane>(settings.lastOpenPane);
+  const [filterStateByBoard, setFilterStateByBoard] = useState<
+    Record<string, BoardFilterState>
+  >({});
 
   function handlePaneChange(pane: Pane) {
     setActivePane(pane);
@@ -25,6 +41,19 @@ export function BoardShell() {
   }
 
   if (!board) return null;
+
+  const boardId = board.id;
+  const filterState = filterStateByBoard[boardId] ?? DEFAULT_FILTER_STATE;
+
+  function updateFilterState(update: Partial<BoardFilterState>) {
+    setFilterStateByBoard((current) => ({
+      ...current,
+      [boardId]: {
+        ...(current[boardId] ?? DEFAULT_FILTER_STATE),
+        ...update,
+      },
+    }));
+  }
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -56,7 +85,12 @@ export function BoardShell() {
             ${activePane === "tasks" ? "flex flex-1" : "hidden"}
           `}
         >
-          <TasksPane key={board.id} board={board} />
+          <TasksPane
+            key={board.id}
+            board={board}
+            filterState={filterState}
+            onFilterStateChange={updateFilterState}
+          />
         </div>
 
       </div>
