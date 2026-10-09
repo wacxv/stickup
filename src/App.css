@@ -262,7 +262,7 @@ select,
 .prose .task-checkbox  {
   margin-right: 0.4em;
   accent-color: #6366f1;
-  cursor: default;
+  cursor: pointer;
 }
 
 .prose blockquote {

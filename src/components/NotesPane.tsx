@@ -17,6 +17,8 @@ import { useDebounce } from "../lib/useDebounce";
 import type { Board } from "../types/board";
 import { FiFileText } from "react-icons/fi";
 
+const TASK_MARKER_RE = /^(\s*(?:[-+*]|\d+[.)])\s+)\[([ xX])\](\s+)/gm;
+
 interface Props {
   board: Board;
 }
@@ -43,6 +45,24 @@ export function NotesPane({ board }: Props) {
   function handleChange(value: string) {
     setLocalNotes(value);
     debouncedPersist(value);
+  }
+
+  function handleToggleTask(taskIndex: number) {
+    let currentTaskIndex = 0;
+    const updatedNotes = localNotes.replace(
+      TASK_MARKER_RE,
+      (match, prefix: string, marker: string, suffix: string) => {
+        if (currentTaskIndex++ !== taskIndex) {
+          return match;
+        }
+
+        return `${prefix}[${marker === " " ? "x" : " "}]${suffix}`;
+      },
+    );
+
+    if (updatedNotes !== localNotes) {
+      handleChange(updatedNotes);
+    }
   }
 
   const isEmpty = localNotes.trim().length === 0;
@@ -82,7 +102,7 @@ export function NotesPane({ board }: Props) {
       ) : isEmpty ? (
         <EmptyNotesState onEdit={() => setMode("edit")} />
       ) : (
-        <NotesPreview source={localNotes} />
+        <NotesPreview source={localNotes} onToggleTask={handleToggleTask} />
       )}
     </div>
   );
