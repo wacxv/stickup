@@ -57,6 +57,7 @@ export function BoardTabBar() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameToast, setRenameToast] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   // ── Overflow detection ───────────────────────────────────────────────────
@@ -153,6 +154,12 @@ export function BoardTabBar() {
     }
   }, [renamingId]);
 
+  useEffect(() => {
+    if (!renameToast) return;
+    const timeout = window.setTimeout(() => setRenameToast(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [renameToast]);
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   function startRename(board: Board, initialValue = board.title) {
@@ -179,11 +186,12 @@ export function BoardTabBar() {
         try {
           await renameActiveBoard(renameValue);
         } catch (err) {
-          setRenameError(
+          const message =
             err instanceof Error
               ? err.message
-              : `Unable to rename "${renameValue}".`,
-          );
+              : `Unable to rename "${renameValue}".`;
+          setRenameError(message);
+          setRenameToast(message);
           return;
         }
       }
@@ -287,6 +295,15 @@ export function BoardTabBar() {
 
   return (
     <>
+      {renameToast && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-10 left-1/2 z-[100] -translate-x-1/2 rounded border border-red-800 bg-neutral-900 px-3 py-2 text-xs text-red-300 shadow-xl"
+        >
+          {renameToast}
+        </div>
+      )}
       <div
         ref={stripRef}
         className="
