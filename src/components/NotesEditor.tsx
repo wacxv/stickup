@@ -41,6 +41,9 @@ interface Props {
 interface ToolbarItem {
   label: ReactNode;
   title: string;
+  shortcut?: string;
+  shortcutKey?: string;
+  shortcutShift?: boolean;
   action: (
     textarea: HTMLTextAreaElement,
     value: string,
@@ -53,18 +56,72 @@ interface ToolbarItem {
 export function NotesEditor({ value, onChange, placeholder }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const undoStackRef = useRef<string[]>([]);
+  const redoStackRef = useRef<string[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  const applyChange = useCallback(
+    (nextValue: string) => {
+      if (nextValue === value) return;
+      undoStackRef.current.push(value);
+      redoStackRef.current = [];
+      onChange(nextValue);
+    },
+    [value, onChange],
+  );
 
   const handleToolbar = useCallback(
     (action: ToolbarItem["action"]) => {
       const ta = textareaRef.current;
       if (!ta) return;
-      action(ta, value, onChange);
+      action(ta, value, applyChange);
       // Return focus to textarea so the user can keep typing
       ta.focus();
     },
+    [value, applyChange],
+  );
+
+  const handleUndoRedo = useCallback(
+    (redo: boolean) => {
+      const source = redo ? redoStackRef.current : undoStackRef.current;
+      const target = redo ? undoStackRef.current : redoStackRef.current;
+      const nextValue = source.pop();
+      if (nextValue === undefined) return false;
+
+      target.push(value);
+      onChange(nextValue);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return true;
+    },
     [value, onChange],
   );
+
+  function handleShortcut(e: KeyboardEvent<HTMLTextAreaElement>): boolean {
+    if (e.nativeEvent.isComposing || (!e.ctrlKey && !e.metaKey) || e.altKey) return false;
+
+    if (e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      handleUndoRedo(e.shiftKey);
+      return true;
+    }
+    if (e.key.toLowerCase() === "y" && !e.shiftKey) {
+      e.preventDefault();
+      handleUndoRedo(true);
+      return true;
+    }
+
+    const shortcut = e.key.toLowerCase();
+    const item = TOOLBAR.find(
+      (candidate) =>
+        candidate.shortcutKey === shortcut &&
+        (candidate.shortcutShift ?? false) === e.shiftKey,
+    );
+    if (!item) return false;
+
+    e.preventDefault();
+    handleToolbar(item.action);
+    return true;
+  }
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -81,16 +138,18 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
 
   // Tab key inserts two spaces instead of moving focus
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (handleShortcut(e)) return;
+
     if (e.key === "Tab") {
       e.preventDefault();
       const ta = e.currentTarget;
-      insertAtCursor(ta, "  ", value, onChange);
+      insertAtCursor(ta, "  ", value, applyChange);
       return;
     }
     if (
       e.key === "Enter" &&
       !e.shiftKey &&
-      continueList(e.currentTarget, value, onChange)
+      continueList(e.currentTarget, value, applyChange)
     ) {
       e.preventDefault();
     }
@@ -162,6 +221,9 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
                 >
                   <span className="toolbar-overflow-icon inline-flex w-5 shrink-0 justify-center">{item.label}</span>
                   <span className="toolbar-overflow-label min-w-0 flex-1 truncate">{item.title}</span>
+                  {item.shortcut && (
+                    <kbd className="shrink-0 text-[10px] text-neutral-500">{item.shortcut}</kbd>
+                  )}
                 </button>
               ))}
             </div>
@@ -173,7 +235,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
       <textarea
         ref={textareaRef}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => applyChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder ?? "Start typing…"}
         spellCheck
@@ -195,21 +257,30 @@ const TOOLBAR: ToolbarItem[] = [
   {
     label: "B",
     title: "Bold (** **)",
+    shortcut: "Ctrl+B",
+    shortcutKey: "b",
     action: (ta, val, set) => wrapSelection(ta, val, set, "**", "**", "bold text"),
   },
   {
     label: "I",
     title: "Italic (_ _)",
+    shortcut: "Ctrl+I",
+    shortcutKey: "i",
     action: (ta, val, set) => wrapSelection(ta, val, set, "_", "_", "italic text"),
   },
   {
     label: "U",
     title: "Underline (++ ++)",
+    shortcut: "Ctrl+U",
+    shortcutKey: "u",
     action: (ta, val, set) => wrapSelection(ta, val, set, "++", "++", "underlined text"),
   },
   {
     label: "S",
     title: "Strikethrough (~~ ~~)",
+    shortcut: "Ctrl+Shift+X",
+    shortcutKey: "x",
+    shortcutShift: true,
     action: (ta, val, set) => wrapSelection(ta, val, set, "~~", "~~", "struck text"),
   },
   {
@@ -240,6 +311,8 @@ const TOOLBAR: ToolbarItem[] = [
   {
     label: <FiLink aria-hidden="true" />,
     title: "Link ([text](url))",
+    shortcut: "Ctrl+K",
+    shortcutKey: "k",
     action: (ta, val, set) => insertLink(ta, val, set),
   },
   {
