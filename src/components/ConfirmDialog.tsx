@@ -12,6 +12,7 @@
  *   onCancel    — Called when the user cancels / presses Escape
  */
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef } from "react";
 
 interface Props {
@@ -45,7 +46,7 @@ export function ConfirmDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  return (
+  return createPortal(
     // Backdrop
     <div
       className="
@@ -100,6 +101,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -98,6 +98,7 @@ type StateCore = Parameters<CoreRuleCallback>[0];
 
 md.core.ruler.after("inline", "task-list", (state: StateCore): void => {
   const tokens = state.tokens;
+  let taskIndex = 0;
   for (let i = 0; i < tokens.length; i++) {
     if (tokens[i].type !== "inline") continue;
     if (!tokens[i - 2] || tokens[i - 2].type !== "list_item_open") continue;
@@ -118,8 +119,9 @@ md.core.ruler.after("inline", "task-list", (state: StateCore): void => {
     tokens[i - 2].attrSet("class", "task-list-item");
 
     const checkbox = new state.Token("html_inline", "", 0);
-    checkbox.content = `<input type="checkbox" disabled${checked ? " checked" : ""} class="task-checkbox"> `;
+    checkbox.content = `<input type="checkbox" data-task-index="${taskIndex}"${checked ? " checked" : ""} class="task-checkbox" aria-label="Toggle task"> `;
     children.unshift(checkbox);
+    taskIndex++;
   }
 });
 

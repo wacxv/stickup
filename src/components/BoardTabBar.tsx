@@ -1,10 +1,14 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type RefObject,
+  type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { useBoardStore } from "../stores/boardStore";
 import type { Board } from "../types/board";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -38,6 +42,77 @@ interface ContextMenuState {
   y: number;
 }
 
+interface ViewportDropdownProps {
+  anchorRef: RefObject<HTMLElement | null>;
+  align: "left" | "right";
+  children: ReactNode;
+  className: string;
+  role?: "menu";
+  ariaLabel?: string;
+}
+
+function ViewportDropdown({
+  anchorRef,
+  align,
+  children,
+  className,
+  role,
+  ariaLabel,
+}: ViewportDropdownProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const anchor = anchorRef.current;
+      const menu = menuRef.current;
+      if (!anchor || !menu) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const margin = 4;
+      const below = anchorRect.bottom + margin;
+      const above = anchorRect.top - menuRect.height - margin;
+      const top =
+        below + menuRect.height <= window.innerHeight || above < margin
+          ? below
+          : above;
+      const preferredLeft =
+        align === "right"
+          ? anchorRect.right - menuRect.width
+          : anchorRect.left;
+      const left = Math.min(
+        Math.max(margin, preferredLeft),
+        Math.max(margin, window.innerWidth - menuRect.width - margin),
+      );
+
+      setPosition({ top, left });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [align, anchorRef]);
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className={className}
+      style={{ position: "fixed", top: position.top, left: position.left }}
+      role={role}
+      aria-label={ariaLabel}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function BoardTabBar() {
@@ -57,6 +132,7 @@ export function BoardTabBar() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameToast, setRenameToast] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   // ── Overflow detection ───────────────────────────────────────────────────
@@ -153,6 +229,12 @@ export function BoardTabBar() {
     }
   }, [renamingId]);
 
+  useEffect(() => {
+    if (!renameToast) return;
+    const timeout = window.setTimeout(() => setRenameToast(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [renameToast]);
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   function startRename(board: Board, initialValue = board.title) {
@@ -179,11 +261,12 @@ export function BoardTabBar() {
         try {
           await renameActiveBoard(renameValue);
         } catch (err) {
-          setRenameError(
+          const message =
             err instanceof Error
               ? err.message
-              : `Unable to rename "${renameValue}".`,
-          );
+              : `Unable to rename "${renameValue}".`;
+          setRenameError(message);
+          setRenameToast(message);
           return;
         }
       }
@@ -287,6 +370,15 @@ export function BoardTabBar() {
 
   return (
     <>
+      {renameToast && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-10 left-1/2 z-[100] -translate-x-1/2 rounded border border-red-800 bg-neutral-900 px-3 py-2 text-xs text-red-300 shadow-xl"
+        >
+          {renameToast}
+        </div>
+      )}
       <div
         ref={stripRef}
         className="
@@ -421,11 +513,13 @@ export function BoardTabBar() {
             </button>
 
             {overflowOpen && (
-              <div
+              <ViewportDropdown
+                anchorRef={overflowRef}
+                align="left"
                 className="
-                  absolute top-full left-0 z-50 min-w-[140px]
+                  z-50 min-w-[140px] max-h-[calc(100vh-8px)] overflow-y-auto
                   bg-neutral-800 border border-neutral-700
-                  rounded-md shadow-lg py-1 mt-0.5
+                  rounded-md shadow-lg py-1
                 "
               >
                 {hiddenBoards.map((board) => (
@@ -448,7 +542,7 @@ export function BoardTabBar() {
                     {board.title}
                   </button>
                 ))}
-              </div>
+              </ViewportDropdown>
             )}
           </div>
         )}
@@ -484,14 +578,16 @@ export function BoardTabBar() {
             <FiClock aria-hidden="true" />
           </button>
           {recentOpen && recentlyClosed.length > 0 && (
-            <div
-              role="menu"
-              aria-label="Recently closed boards"
+            <ViewportDropdown
+              anchorRef={recentRef}
+              align="right"
               className="
-                absolute top-full right-0 z-50 min-w-[180px]
+                z-50 min-w-[180px] max-h-[calc(100vh-8px)] overflow-y-auto
                 bg-neutral-800 border border-neutral-700 rounded-md
-                shadow-lg py-1 mt-0.5
+                shadow-lg py-1
               "
+              role="menu"
+              ariaLabel="Recently closed boards"
             >
               {recentlyClosed.map((board) => (
                 <button
@@ -510,7 +606,7 @@ export function BoardTabBar() {
                   {board.title}
                 </button>
               ))}
-            </div>
+            </ViewportDropdown>
           )}
         </div>
 
