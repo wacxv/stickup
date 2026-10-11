@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type RefObject,
   type ReactNode,
 } from "react";
@@ -120,6 +121,7 @@ export function BoardTabBar() {
     boards,
     activeBoardId,
     setActiveBoard,
+    reorderBoards,
     addGhostBoard,
     renameActiveBoard,
     deleteBoardById,
@@ -140,6 +142,16 @@ export function BoardTabBar() {
   const [visibleCount, setVisibleCount] = useState<number>(boards.length);
   const [tabListOpen, setTabListOpen] = useState(false);
   const tabListRef = useRef<HTMLDivElement>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const tabPointerRef = useRef<{
+    boardId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressTabClickRef = useRef(false);
 
   // ── Context menu ─────────────────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -233,6 +245,84 @@ export function BoardTabBar() {
     setRenamingId(board.id);
     setRenameValue(initialValue);
     setRenameError(null);
+  }
+
+  function handleTabPointerDown(
+    event: PointerEvent<HTMLDivElement>,
+    boardId: string,
+  ) {
+    if (event.button !== 0 || renamingId) return;
+    tabPointerRef.current = {
+      boardId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleTabPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const pointer = tabPointerRef.current;
+    if (!pointer || pointer.pointerId !== event.pointerId) return;
+
+    const movedDistance = Math.hypot(
+      event.clientX - pointer.startX,
+      event.clientY - pointer.startY,
+    );
+    if (!pointer.dragging && movedDistance >= 5) {
+      pointer.dragging = true;
+      setDraggingId(pointer.boardId);
+    }
+    if (!pointer.dragging) return;
+
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-tab]");
+    setDragOverId(target?.dataset.boardId ?? null);
+  }
+
+  async function handleTabPointerUp(event: PointerEvent<HTMLDivElement>) {
+    const pointer = tabPointerRef.current;
+    if (!pointer || pointer.pointerId !== event.pointerId) return;
+
+    const wasDragging = pointer.dragging;
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-tab]");
+    const targetId = target?.dataset.boardId;
+    const targetRect = target?.getBoundingClientRect();
+    const insertBefore =
+      targetRect !== undefined &&
+      event.clientX < targetRect.left + targetRect.width / 2;
+
+    tabPointerRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!wasDragging) return;
+    suppressTabClickRef.current = true;
+    if (!targetId || targetId === pointer.boardId) return;
+
+    const sourceIndex = boards.findIndex((board) => board.id === pointer.boardId);
+    const targetIndex = boards.findIndex((board) => board.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const nextOrder = boards.map((board) => board.id);
+    const [movedId] = nextOrder.splice(sourceIndex, 1);
+    let insertionIndex = nextOrder.indexOf(targetId);
+    if (!insertBefore) insertionIndex += 1;
+    nextOrder.splice(insertionIndex, 0, movedId);
+
+    try {
+      await reorderBoards(nextOrder);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to reorder boards.";
+      setRenameToast(message);
+    }
   }
 
   async function commitRename() {
@@ -487,6 +577,8 @@ export function BoardTabBar() {
         </div>
 
         {/* ── Visible tabs ──────────────────────────────────────────────── */}
+        {/* Reordering is intentionally confined to this tab strip. A future
+            tab tear-off/new-window interaction would be a separate feature. */}
         {visibleBoards.map((board) => {
           const isActive = board.id === activeBoardId;
           const isRenaming = board.id === renamingId;
@@ -495,10 +587,18 @@ export function BoardTabBar() {
             <div
               key={board.id}
               data-tab
+              data-board-id={board.id}
               role="tab"
               aria-selected={isActive}
               tabIndex={0}
-              onClick={() => setActiveBoard(board.id)}
+              aria-grabbed={draggingId === board.id}
+              onClick={() => {
+                if (suppressTabClickRef.current) {
+                  suppressTabClickRef.current = false;
+                  return;
+                }
+                setActiveBoard(board.id);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -507,10 +607,28 @@ export function BoardTabBar() {
               }}
               onDoubleClick={() => startRename(board)}
               onContextMenu={(e) => openContextMenu(e, board.id)}
+              onPointerDown={(e) => handleTabPointerDown(e, board.id)}
+              onPointerMove={handleTabPointerMove}
+              onPointerUp={(e) => void handleTabPointerUp(e)}
+              onPointerCancel={(e) => {
+                const pointer = tabPointerRef.current;
+                if (
+                  pointer &&
+                  pointer.pointerId !== undefined &&
+                  e.currentTarget.hasPointerCapture(pointer.pointerId)
+                ) {
+                  e.currentTarget.releasePointerCapture(pointer.pointerId);
+                }
+                tabPointerRef.current = null;
+                setDraggingId(null);
+                setDragOverId(null);
+              }}
               title={board.ghost ? `${board.title} (not yet saved)` : board.title}
               className={`
                 group relative flex items-center rounded-t-md px-3 max-w-[120px] shrink-0
                 text-xs truncate transition-colors
+                ${draggingId === board.id ? "opacity-50" : ""}
+                ${dragOverId === board.id ? "ring-1 ring-inset ring-indigo-500" : ""}
                 ${
                   isActive
                     ? "text-neutral-100 bg-neutral-950 after:absolute after:bottom-0 after:inset-x-0 after:h-[2px] after:bg-indigo-500"
@@ -555,6 +673,7 @@ export function BoardTabBar() {
                   e.stopPropagation();
                   void closeBoard(board.id);
                 }}
+                onPointerDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
