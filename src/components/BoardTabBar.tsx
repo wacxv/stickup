@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type RefObject,
   type ReactNode,
 } from "react";
@@ -14,7 +15,7 @@ import type { Board } from "../types/board";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { storagePath } from "../lib/storage";
-import { FiChevronDown, FiClock, FiPlus, FiX } from "react-icons/fi";
+import { FiChevronDown, FiPlus, FiX } from "react-icons/fi";
 
 /**
  * BoardTabBar
@@ -23,8 +24,8 @@ import { FiChevronDown, FiClock, FiPlus, FiX } from "react-icons/fi";
  *
  * Behaviour:
  *  - Tabs are laid out horizontally; titles truncate with ellipsis
- *  - When tabs overflow the strip width an "▾ N more" overflow button
- *    appears that opens a dropdown listing the hidden boards
+ *  - A tab-list button opens a dropdown containing all open and recently
+ *    closed boards
  *  - "+" creates a ghost board (lazy-write) and drops into inline rename
  *  - Right-clicking a tab opens a context menu with:
  *      New | Delete | Open file location | Close
@@ -120,6 +121,7 @@ export function BoardTabBar() {
     boards,
     activeBoardId,
     setActiveBoard,
+    reorderBoards,
     addGhostBoard,
     renameActiveBoard,
     deleteBoardById,
@@ -135,13 +137,21 @@ export function BoardTabBar() {
   const [renameToast, setRenameToast] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Overflow detection ───────────────────────────────────────────────────
+  // ── Tab-list and overflow detection ──────────────────────────────────────
   const stripRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState<number>(boards.length);
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowRef = useRef<HTMLDivElement>(null);
-  const [recentOpen, setRecentOpen] = useState(false);
-  const recentRef = useRef<HTMLDivElement>(null);
+  const [tabListOpen, setTabListOpen] = useState(false);
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const tabPointerRef = useRef<{
+    boardId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressTabClickRef = useRef(false);
 
   // ── Context menu ─────────────────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -160,9 +170,8 @@ export function BoardTabBar() {
       const tabEls = Array.from(
         strip.querySelectorAll<HTMLElement>("[data-measure-tab]"),
       );
-      // Reserve space for the + and recently-closed buttons.
-      const addButtonWidth = 64;
-      const overflowButtonWidth = 50;
+      // Reserve space for the tab-list button and + button.
+      const fixedButtonWidth = 64;
 
       function fitCount(available: number) {
         let used = 0;
@@ -175,10 +184,7 @@ export function BoardTabBar() {
         return count;
       }
 
-      let count = fitCount(strip.clientWidth - addButtonWidth);
-      if (count < boards.length) {
-        count = fitCount(strip.clientWidth - addButtonWidth - overflowButtonWidth);
-      }
+      const count = fitCount(strip.clientWidth - fixedButtonWidth);
       setVisibleCount(Math.max(1, count));
     };
 
@@ -188,20 +194,17 @@ export function BoardTabBar() {
     return () => ro.disconnect();
   }, [boards]);
 
-  // Close overflow dropdown on outside click
+  // Close the tab-list dropdown on outside click
   useEffect(() => {
-    if (!overflowOpen && !recentOpen) return;
+    if (!tabListOpen) return;
     const handler = (e: globalThis.MouseEvent) => {
-      if (!overflowRef.current?.contains(e.target as Node)) {
-        setOverflowOpen(false);
-      }
-      if (!recentRef.current?.contains(e.target as Node)) {
-        setRecentOpen(false);
+      if (!tabListRef.current?.contains(e.target as Node)) {
+        setTabListOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [overflowOpen, recentOpen]);
+  }, [tabListOpen]);
 
   // Close context menu on outside click or Escape
   useEffect(() => {
@@ -242,6 +245,84 @@ export function BoardTabBar() {
     setRenamingId(board.id);
     setRenameValue(initialValue);
     setRenameError(null);
+  }
+
+  function handleTabPointerDown(
+    event: PointerEvent<HTMLDivElement>,
+    boardId: string,
+  ) {
+    if (event.button !== 0 || renamingId) return;
+    tabPointerRef.current = {
+      boardId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleTabPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const pointer = tabPointerRef.current;
+    if (!pointer || pointer.pointerId !== event.pointerId) return;
+
+    const movedDistance = Math.hypot(
+      event.clientX - pointer.startX,
+      event.clientY - pointer.startY,
+    );
+    if (!pointer.dragging && movedDistance >= 5) {
+      pointer.dragging = true;
+      setDraggingId(pointer.boardId);
+    }
+    if (!pointer.dragging) return;
+
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-tab]");
+    setDragOverId(target?.dataset.boardId ?? null);
+  }
+
+  async function handleTabPointerUp(event: PointerEvent<HTMLDivElement>) {
+    const pointer = tabPointerRef.current;
+    if (!pointer || pointer.pointerId !== event.pointerId) return;
+
+    const wasDragging = pointer.dragging;
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-tab]");
+    const targetId = target?.dataset.boardId;
+    const targetRect = target?.getBoundingClientRect();
+    const insertBefore =
+      targetRect !== undefined &&
+      event.clientX < targetRect.left + targetRect.width / 2;
+
+    tabPointerRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!wasDragging) return;
+    suppressTabClickRef.current = true;
+    if (!targetId || targetId === pointer.boardId) return;
+
+    const sourceIndex = boards.findIndex((board) => board.id === pointer.boardId);
+    const targetIndex = boards.findIndex((board) => board.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const nextOrder = boards.map((board) => board.id);
+    const [movedId] = nextOrder.splice(sourceIndex, 1);
+    let insertionIndex = nextOrder.indexOf(targetId);
+    if (!insertBefore) insertionIndex += 1;
+    nextOrder.splice(insertionIndex, 0, movedId);
+
+    try {
+      await reorderBoards(nextOrder);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to reorder boards.";
+      setRenameToast(message);
+    }
   }
 
   async function commitRename() {
@@ -363,9 +444,6 @@ export function BoardTabBar() {
           activeBoard,
         ]
       : initialVisibleBoards;
-  const visibleIds = new Set(visibleBoards.map((board) => board.id));
-  const hiddenBoards = boards.filter((board) => !visibleIds.has(board.id));
-
   const confirmTarget = boards.find((b) => b.id === confirmDeleteId);
 
   return (
@@ -408,7 +486,99 @@ export function BoardTabBar() {
           ))}
         </div>
 
+        {/* ── Tab list button — browser-style, before the open tabs ─────── */}
+        <div ref={tabListRef} className="relative flex items-center">
+          <button
+            type="button"
+            onClick={() => setTabListOpen((open) => !open)}
+            title="Open boards and recently closed boards"
+            aria-label="Open boards and recently closed boards"
+            aria-expanded={tabListOpen}
+            className="
+              flex items-center justify-center w-8 h-full shrink-0
+              text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800
+              transition-colors
+            "
+          >
+            <FiChevronDown aria-hidden="true" />
+          </button>
+
+          {tabListOpen && (
+            <ViewportDropdown
+              anchorRef={tabListRef}
+              align="left"
+              className="
+                z-50 min-w-[220px] max-w-[min(320px,calc(100vw-8px))]
+                max-h-[calc(100vh-8px)] overflow-y-auto
+                bg-neutral-800 border border-neutral-700 rounded-md
+                shadow-lg py-1
+              "
+              role="menu"
+              ariaLabel="Open boards and recently closed boards"
+            >
+              <div className="px-3 pt-1 pb-1 text-[10px] text-neutral-500">
+                Open boards
+              </div>
+              {boards.map((board) => {
+                const isActive = board.id === activeBoardId;
+                return (
+                  <button
+                    key={board.id}
+                    type="button"
+                    role="menuitem"
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => {
+                      setActiveBoard(board.id);
+                      setTabListOpen(false);
+                    }}
+                    onContextMenu={(e) => {
+                      setTabListOpen(false);
+                      openContextMenu(e, board.id);
+                    }}
+                    className={`
+                      w-full text-left px-3 py-1.5 text-xs
+                      hover:bg-neutral-700 hover:text-neutral-100
+                      truncate transition-colors
+                      ${isActive ? "text-neutral-100 bg-neutral-700/60" : "text-neutral-300"}
+                    `}
+                  >
+                    {board.title}
+                  </button>
+                );
+              })}
+
+              {recentlyClosed.length > 0 && (
+                <>
+                  <div className="mt-1 border-t border-neutral-700 px-3 pt-2 pb-1 text-[10px] text-neutral-500">
+                    Recently closed
+                  </div>
+                  {recentlyClosed.map((board) => (
+                    <button
+                      key={board.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        void reopenBoard(board.id);
+                        setTabListOpen(false);
+                      }}
+                      className="
+                        w-full text-left px-3 py-1.5 text-xs text-neutral-400
+                        hover:bg-neutral-700 hover:text-neutral-100
+                        truncate transition-colors
+                      "
+                    >
+                      {board.title}
+                    </button>
+                  ))}
+                </>
+              )}
+            </ViewportDropdown>
+          )}
+        </div>
+
         {/* ── Visible tabs ──────────────────────────────────────────────── */}
+        {/* Reordering is intentionally confined to this tab strip. A future
+            tab tear-off/new-window interaction would be a separate feature. */}
         {visibleBoards.map((board) => {
           const isActive = board.id === activeBoardId;
           const isRenaming = board.id === renamingId;
@@ -417,10 +587,18 @@ export function BoardTabBar() {
             <div
               key={board.id}
               data-tab
+              data-board-id={board.id}
               role="tab"
               aria-selected={isActive}
               tabIndex={0}
-              onClick={() => setActiveBoard(board.id)}
+              aria-grabbed={draggingId === board.id}
+              onClick={() => {
+                if (suppressTabClickRef.current) {
+                  suppressTabClickRef.current = false;
+                  return;
+                }
+                setActiveBoard(board.id);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -429,10 +607,28 @@ export function BoardTabBar() {
               }}
               onDoubleClick={() => startRename(board)}
               onContextMenu={(e) => openContextMenu(e, board.id)}
+              onPointerDown={(e) => handleTabPointerDown(e, board.id)}
+              onPointerMove={handleTabPointerMove}
+              onPointerUp={(e) => void handleTabPointerUp(e)}
+              onPointerCancel={(e) => {
+                const pointer = tabPointerRef.current;
+                if (
+                  pointer &&
+                  pointer.pointerId !== undefined &&
+                  e.currentTarget.hasPointerCapture(pointer.pointerId)
+                ) {
+                  e.currentTarget.releasePointerCapture(pointer.pointerId);
+                }
+                tabPointerRef.current = null;
+                setDraggingId(null);
+                setDragOverId(null);
+              }}
               title={board.ghost ? `${board.title} (not yet saved)` : board.title}
               className={`
-                group relative flex items-center px-3 max-w-[120px] shrink-0
+                group relative flex items-center rounded-t-md px-3 max-w-[120px] shrink-0
                 text-xs truncate transition-colors
+                ${draggingId === board.id ? "opacity-50" : ""}
+                ${dragOverId === board.id ? "ring-1 ring-inset ring-indigo-500" : ""}
                 ${
                   isActive
                     ? "text-neutral-100 bg-neutral-950 after:absolute after:bottom-0 after:inset-x-0 after:h-[2px] after:bg-indigo-500"
@@ -477,6 +673,7 @@ export function BoardTabBar() {
                   e.stopPropagation();
                   void closeBoard(board.id);
                 }}
+                onPointerDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -497,56 +694,6 @@ export function BoardTabBar() {
           );
         })}
 
-        {/* ── Overflow button ───────────────────────────────────────────── */}
-        {hiddenBoards.length > 0 && (
-          <div ref={overflowRef} className="relative flex items-center">
-            <button
-              onClick={() => setOverflowOpen((o) => !o)}
-              className="
-                flex items-center gap-1 px-2 h-full
-                text-xs text-neutral-400 hover:text-neutral-200
-                hover:bg-neutral-800 transition-colors
-              "
-            >
-              <FiChevronDown aria-hidden="true" />
-              <span>{hiddenBoards.length}</span>
-            </button>
-
-            {overflowOpen && (
-              <ViewportDropdown
-                anchorRef={overflowRef}
-                align="left"
-                className="
-                  z-50 min-w-[140px] max-h-[calc(100vh-8px)] overflow-y-auto
-                  bg-neutral-800 border border-neutral-700
-                  rounded-md shadow-lg py-1
-                "
-              >
-                {hiddenBoards.map((board) => (
-                  <button
-                    key={board.id}
-                    onClick={() => {
-                      setActiveBoard(board.id);
-                      setOverflowOpen(false);
-                    }}
-                    onContextMenu={(e) => {
-                      setOverflowOpen(false);
-                      openContextMenu(e, board.id);
-                    }}
-                    className="
-                      w-full text-left px-3 py-1.5 text-xs
-                      text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100
-                      truncate transition-colors
-                    "
-                  >
-                    {board.title}
-                  </button>
-                ))}
-              </ViewportDropdown>
-            )}
-          </div>
-        )}
-
         {/* ── Add board button — browser-style, after the open tabs ─────── */}
         <button
           onClick={handleNewBoard}
@@ -560,55 +707,6 @@ export function BoardTabBar() {
         >
           <FiPlus aria-hidden="true" />
         </button>
-
-        <div ref={recentRef} className="relative flex items-center">
-          <button
-            type="button"
-            onClick={() => setRecentOpen((open) => !open)}
-            title="Recently closed boards"
-            aria-label="Recently closed boards"
-            aria-expanded={recentOpen}
-            disabled={recentlyClosed.length === 0}
-            className="
-              flex items-center justify-center w-8 h-full shrink-0
-              text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800
-              transition-colors disabled:opacity-30 disabled:cursor-default
-            "
-          >
-            <FiClock aria-hidden="true" />
-          </button>
-          {recentOpen && recentlyClosed.length > 0 && (
-            <ViewportDropdown
-              anchorRef={recentRef}
-              align="right"
-              className="
-                z-50 min-w-[180px] max-h-[calc(100vh-8px)] overflow-y-auto
-                bg-neutral-800 border border-neutral-700 rounded-md
-                shadow-lg py-1
-              "
-              role="menu"
-              ariaLabel="Recently closed boards"
-            >
-              {recentlyClosed.map((board) => (
-                <button
-                  key={board.id}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    void reopenBoard(board.id);
-                    setRecentOpen(false);
-                  }}
-                  className="
-                    w-full text-left px-3 py-1.5 text-xs text-neutral-300
-                    hover:bg-neutral-700 hover:text-neutral-100 truncate
-                  "
-                >
-                  {board.title}
-                </button>
-              ))}
-            </ViewportDropdown>
-          )}
-        </div>
 
         <div className="flex-1" />
       </div>

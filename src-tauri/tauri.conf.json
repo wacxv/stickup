@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "StickUp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.wacxv.stickup",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -46,8 +46,7 @@
         "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
         "languages": ["English"],
-        "displayLanguageSelector": false,
-        "minimumWebview2Version": "2.0.0.0"
+        "displayLanguageSelector": false
       },
       "webviewInstallMode": {
         "type": "offlineInstaller",

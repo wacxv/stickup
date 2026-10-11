@@ -6,7 +6,6 @@
  * and wires all mutations back to the boardStore.
  */
 
-import { useState } from "react";
 import type { Board } from "../types/board";
 import type { Task } from "../types/task";
 import { useBoardStore } from "../stores/boardStore";
@@ -20,15 +19,22 @@ import { triggerBackgroundTimer } from "../lib/backgroundTimer";
 
 interface Props {
   board: Board;
+  filterState: {
+    sortByDue: boolean;
+    filterPriority: FilterPriority;
+    filterRecurrence: FilterRecurrence;
+  };
+  onFilterStateChange: (
+    update: Partial<Props["filterState"]>,
+  ) => void;
 }
 
-export function TasksPane({ board }: Props) {
+export function TasksPane({
+  board,
+  filterState,
+  onFilterStateChange,
+}: Props) {
   const { addTask, updateTask, deleteTask, reorderTasks } = useBoardStore();
-
-  const [sortByDue, setSortByDue] = useState(false);
-  const [filterPriority, setFilterPriority] = useState<FilterPriority>("all");
-  const [filterRecurrence, setFilterRecurrence] =
-    useState<FilterRecurrence>("all");
 
   // ── Handlers wired to boardStore ─────────────────────────────────────────
 
@@ -61,20 +67,24 @@ export function TasksPane({ board }: Props) {
     <div className="flex flex-col h-full min-h-0">
       {/* Filters bar */}
       <TaskFilters
-        sortByDue={sortByDue}
-        onSortByDue={setSortByDue}
-        filterPriority={filterPriority}
-        onFilterPriority={setFilterPriority}
-        filterRecurrence={filterRecurrence}
-        onFilterRecurrence={setFilterRecurrence}
+        sortByDue={filterState.sortByDue}
+        onSortByDue={(sortByDue) => onFilterStateChange({ sortByDue })}
+        filterPriority={filterState.filterPriority}
+        onFilterPriority={(filterPriority) =>
+          onFilterStateChange({ filterPriority })
+        }
+        filterRecurrence={filterState.filterRecurrence}
+        onFilterRecurrence={(filterRecurrence) =>
+          onFilterStateChange({ filterRecurrence })
+        }
       />
 
       {/* Scrollable task list */}
       <TaskList
         tasks={board.tasks}
-        sortEnabled={sortByDue}
-        filterPriority={filterPriority}
-        filterRecurrence={filterRecurrence}
+        sortEnabled={filterState.sortByDue}
+        filterPriority={filterState.filterPriority}
+        filterRecurrence={filterState.filterRecurrence}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         onReorder={handleReorder}
