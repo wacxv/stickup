@@ -4,7 +4,7 @@
 
 ### *Sticky notes that actually know what's due.*
 
-[![GitHub Release](https://shields.io)](https://github.com/wacxv/stickup/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/wacxv/stickup)](https://github.com/wacxv/stickup/releases/latest)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
