@@ -46,8 +46,7 @@
         "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
         "languages": ["English"],
-        "displayLanguageSelector": false,
-        "minimumWebview2Version": "2.0.0.0"
+        "displayLanguageSelector": false
       },
       "webviewInstallMode": {
         "type": "offlineInstaller",
