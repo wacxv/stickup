@@ -4,7 +4,7 @@
 
 ### *Sticky notes that actually know what's due.*
 
-[![Release: v1.0.1](https://img.shields.io/badge/Release-v1.0.1-brightgreen)](https://github.com/wacxv/stickup/releases)
+[![GitHub Release](https://shields.io)](https://github.com/wacxv/stickup/releases)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -60,14 +60,6 @@ Most note-taking tools either clutter your desktop, force you to Alt-Tab away fr
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 - **State Management**: [Zustand](https://github.com/pmndrs/zustand)
 - **Markdown & Syntax Highlighting**: [markdown-it](https://github.com/markdown-it/markdown-it) & [highlight.js](https://highlightjs.org/)
-
----
-
-## 🚀 Status
-
-**v1.0.1 is officially released!** 🎉
-
-StickUp is stable, local-first, and ready for daily use. Check out our [Releases page](https://github.com/wacxv/stickup/releases) to download the latest executable.
 
 ---
 
