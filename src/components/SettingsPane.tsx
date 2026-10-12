@@ -24,6 +24,7 @@ import { triggerBackgroundTimer } from "../lib/backgroundTimer";
 import { checkForUpdates, RELEASES_URL } from "../lib/updateCheck";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { FiX } from "react-icons/fi";
+import { APP_VERSION } from "../lib/appInfo";
 
 interface Props {
   onClose: () => void;
@@ -166,6 +167,9 @@ export function SettingsPane({ onClose }: Props) {
 
         <Section title="Updates">
           <div className="flex flex-col gap-2">
+            <p className="text-[10px] text-neutral-500">
+              Current version: <span className="text-neutral-300">v{APP_VERSION}</span>
+            </p>
             <button
               onClick={handleCheckForUpdates}
               disabled={updateStatus === "checking"}

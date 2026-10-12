@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { TitleBar } from "./components/TitleBar";
 import { useBoardStore } from "./stores/boardStore";
@@ -7,48 +7,19 @@ import { BoardTabBar } from "./components/BoardTabBar";
 import { BoardShell } from "./components/BoardShell";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { SettingsPane } from "./components/SettingsPane";
-import { startBackgroundTimer } from "./lib/backgroundTimer";
-import type { StopFn } from "./lib/backgroundTimer";
-import { ensureNotificationPermission } from "./lib/notificationService";
 
 function App() {
   const { loadBoards, boards, loading } = useBoardStore();
   const { loadSettings } = useSettingsStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const stopTimerRef = useRef<StopFn | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
     async function bootstrap() {
       await loadSettings();
       await loadBoards();
-      if (cancelled) return;
-
-      // Ensure notification permission is requested and granted
-      await ensureNotificationPermission();
-      if (cancelled) return;
-
-      stopTimerRef.current = startBackgroundTimer(
-        () => useBoardStore.getState().boards,
-        () => useSettingsStore.getState().settings,
-        {
-          onTasksUpdated: async (boardId, tasks) => {
-            // Access via getState() — the destructured `reorderTasks` from the
-            // render-time hook is frozen in this [] effect and may be stale.
-            await useBoardStore.getState().reorderTasks(boardId, tasks);
-          },
-        },
-      );
     }
 
     void bootstrap();
-
-    return () => {
-      cancelled = true;
-      stopTimerRef.current?.();
-      stopTimerRef.current = null;
-    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

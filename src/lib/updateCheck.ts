@@ -1,4 +1,4 @@
-import tauriConfig from "../../src-tauri/tauri.conf.json";
+import { APP_VERSION } from "./appInfo";
 
 export const RELEASES_URL = "https://github.com/wacxv/stickup/releases";
 const LATEST_RELEASE_URL =
@@ -78,7 +78,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
   }
 
   const latestVersion = parseSemver(release.tag_name.replace(/^v/, ""));
-  const currentVersion = parseSemver(tauriConfig.version);
+  const currentVersion = parseSemver(APP_VERSION);
   if (!latestVersion || !currentVersion) {
     throw new Error("Unable to compare release versions");
   }

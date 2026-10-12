@@ -365,6 +365,9 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       })
       .filter((b): b is Board => b !== null);
 
+    // Optimistically update memory state immediately so UI re-renders without delay
+    set({ boards: reordered });
+
     // Persist order changes to each non-ghost file
     await Promise.all(reordered.filter((b) => !b.ghost).map(writeBoard));
     await syncIndex(
@@ -373,7 +376,6 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       get().recentlyClosed.map((b) => b.id),
       get().recentlyClosed,
     );
-    set({ boards: reordered });
   },
 }));
 
