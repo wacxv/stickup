@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { MdClose, MdOutlinePushPin, MdPushPin, MdMinimize } from "react-icons/md";
 import { GoGear } from "react-icons/go";
+import { APP_VERSION } from "../lib/appInfo";
 
 const appWindow = getCurrentWindow();
 
@@ -37,12 +38,17 @@ export function TitleBar({ onSettingsOpen }: Props) {
         bg-neutral-900 text-neutral-300
       "
     >
-      <span
+      <div
         data-tauri-drag-region
-        className="flex-1 text-xs font-semibold tracking-widest uppercase pl-1 cursor-default"
+        className="flex flex-1 items-baseline gap-1.5 pl-1 cursor-default"
       >
-        StickUp
-      </span>
+        <span className="text-xs font-semibold tracking-widest uppercase">
+          StickUp
+        </span>
+        <span className="text-[9px] font-normal tracking-normal text-neutral-500">
+          v{APP_VERSION}
+        </span>
+      </div>
 
       <div className="flex items-center gap-0.5">
         {/* Settings gear */}
