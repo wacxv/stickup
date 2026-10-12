@@ -45,7 +45,7 @@ Most note-taking tools either clutter your desktop, force you to Alt-Tab away fr
 - 🎯 **Priority & Filter Controls**: Prioritize tasks (`High`, `Normal`, `Low`) and quickly filter by due date, recurrence, or priority.
 - 📌 **Always-on-Top Pin**: Toggle pin mode to keep StickUp floating comfortably above your active IDE, browser, or documents.
 - 🗂️ **Per-Board Tab Organization**: Switch contexts instantly across tabbed boards with scoped notes and task lists. Includes an in-memory recently closed board recovery list.
-- 🎛️ **Tray-Resident & Autostart**: Closing the window hides it to the system tray so background notification timers remain active; optional launch on Windows startup.
+- 🎛️ **Tray-Resident & Autostart**: Closing the window hides it to the system tray while a Rust-owned reminder worker continues recurrence and notification checks. On Windows, the hidden WebView2 controller is marked inactive to reduce background work and memory pressure; optional launch on Windows startup.
 - 📐 **Adaptive Two-Pane Layout**: Seamlessly transitions from a compact single-column scratchpad (with a quick Notes/Tasks toggle) to a wide side-by-side view.
 - 🔒 **Simple & Local-First by Design**:
   - **No Accounts or Cloud**: Zero sign-ups, zero telemetry, zero lock-in.

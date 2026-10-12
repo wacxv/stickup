@@ -8,6 +8,8 @@ use tauri::{
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_fs::FsExt;
 
+mod background;
+
 // ─── Tauri commands ───────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -31,6 +33,25 @@ fn storage_dir_path<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<std:
     Ok(parent.join("StickUp"))
 }
 
+#[tauri::command]
+fn run_background_check<R: Runtime>(app: tauri::AppHandle<R>) -> tauri::Result<()> {
+    background::check(&app)
+        .map_err(|error| tauri::Error::Io(std::io::Error::other(error.to_string())))
+}
+
+#[tauri::command]
+fn set_webview_inactive<R: Runtime>(app: tauri::AppHandle<R>, inactive: bool) -> tauri::Result<()> {
+    #[cfg(target_os = "windows")]
+    if let Some(window) = app.get_webview_window("main") {
+        window.with_webview(move |webview| {
+            if let Err(error) = unsafe { webview.controller().SetIsVisible(!inactive) } {
+                eprintln!("[webview] failed to set visibility: {error}");
+            }
+        })?;
+    }
+    Ok(())
+}
+
 // ─── App entry point ──────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,7 +67,12 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .invoke_handler(tauri::generate_handler![greet, storage_dir])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            storage_dir,
+            run_background_check,
+            set_webview_inactive
+        ])
         .setup(|app| {
             let app_handle = app.handle();
             let storage_dir = storage_dir_path(&app_handle)?;
@@ -55,6 +81,7 @@ pub fn run() {
 
             setup_tray(app)?;
             apply_startup_visibility(app);
+            background::start(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -96,6 +123,7 @@ fn apply_startup_visibility<R: Runtime>(app: &mut tauri::App<R>) {
         || raw.contains("\"startupVisibility\": \"hidden\"")
     {
         if let Some(window) = app.get_webview_window("main") {
+            let _ = set_webview_inactive(app.handle().clone(), true);
             let _ = window.hide();
         }
     }
@@ -142,6 +170,7 @@ fn setup_tray<R: Runtime>(app: &mut tauri::App<R>) -> tauri::Result<()> {
 
 fn show_window<R: Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
+        let _ = set_webview_inactive(app.clone(), false);
         let _ = window.show();
         let _ = window.set_focus();
     }

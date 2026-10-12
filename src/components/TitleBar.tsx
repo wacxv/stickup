@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { MdClose, MdOutlinePushPin, MdPushPin, MdMinimize } from "react-icons/md";
 import { GoGear } from "react-icons/go";
 
@@ -23,6 +24,7 @@ export function TitleBar({ onSettingsOpen }: Props) {
   }
 
   async function handleClose() {
+    await invoke("set_webview_inactive", { inactive: true });
     await appWindow.hide();
   }
 
