@@ -114,6 +114,101 @@ function ViewportDropdown({
   );
 }
 
+// ─── Tab drag & reorder animation types ───────────────────────────────────────
+
+interface TabGeometry {
+  id: string;
+  left: number;
+  width: number;
+  center: number;
+}
+
+interface DragState {
+  boardId: string;
+  originIndex: number;
+  targetIndex: number;
+  deltaX: number;
+  draggedWidth: number;
+  tabGeometries: TabGeometry[];
+  slotCenters: number[];
+  isDragging: boolean;
+  isDropping: boolean;
+  targetOffset: number;
+}
+
+/**
+ * Computes the exact resting center coordinate of the dragged tab for each
+ * candidate slot j in [0, N-1], accounting for the varying widths of all tabs.
+ */
+function computeSlotCenters(
+  originIndex: number,
+  geometries: TabGeometry[],
+): number[] {
+  const draggedWidth = geometries[originIndex].width;
+  const n = geometries.length;
+  const slotCenters: number[] = new Array(n);
+
+  for (let j = 0; j < n; j++) {
+    let slotLeft: number;
+    if (j === originIndex) {
+      slotLeft = geometries[originIndex].left;
+    } else if (j < originIndex) {
+      slotLeft = geometries[j].left;
+    } else {
+      // Placed after tab j; all tabs between originIndex+1 and j have shifted left by draggedWidth
+      slotLeft = geometries[j].left + geometries[j].width - draggedWidth;
+    }
+    slotCenters[j] = slotLeft + draggedWidth / 2;
+  }
+
+  return slotCenters;
+}
+
+/**
+ * Finds the slot whose threshold the dragged tab's center has crossed.
+ * The threshold between slot j and j+1 is the exact 50% midpoint between
+ * the dragged tab's resting center at slot j and slot j+1.
+ */
+function getTargetIndex(currentCenter: number, slotCenters: number[]): number {
+  const n = slotCenters.length;
+  let target = 0;
+  for (let j = 0; j < n - 1; j++) {
+    const threshold = (slotCenters[j] + slotCenters[j + 1]) / 2;
+    if (currentCenter >= threshold) {
+      target = j + 1;
+    } else {
+      break;
+    }
+  }
+  return target;
+}
+
+function computeTargetOffset(
+  originIndex: number,
+  targetIndex: number,
+  slotCenters: number[],
+): number {
+  return slotCenters[targetIndex] - slotCenters[originIndex];
+}
+
+function getTabShift(
+  k: number,
+  originIndex: number,
+  targetIndex: number,
+  draggedWidth: number,
+): number {
+  if (targetIndex > originIndex) {
+    if (k > originIndex && k <= targetIndex) {
+      return -draggedWidth;
+    }
+  } else if (targetIndex < originIndex) {
+    if (k >= targetIndex && k < originIndex) {
+      return draggedWidth;
+    }
+  }
+  return 0;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function BoardTabBar() {
@@ -142,8 +237,10 @@ export function BoardTabBar() {
   const [visibleCount, setVisibleCount] = useState<number>(boards.length);
   const [tabListOpen, setTabListOpen] = useState(false);
   const tabListRef = useRef<HTMLDivElement>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // ── Interactive drag & reorder animation state ────────────────────────────
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const dragStateRef = useRef<DragState | null>(null);
   const tabPointerRef = useRef<{
     boardId: string;
     pointerId: number;
@@ -152,6 +249,46 @@ export function BoardTabBar() {
     dragging: boolean;
   } | null>(null);
   const suppressTabClickRef = useRef(false);
+  const dropTimeoutRef = useRef<number | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+
+  const boardsRef = useRef(boards);
+  boardsRef.current = boards;
+
+  // Keep the active board in the main strip. A board selected from the
+  // overflow menu may otherwise remain hidden while the first tab still
+  // appears to be selected.
+  const initialVisibleBoards = boards.slice(0, visibleCount);
+  const activeBoard = boards.find((board) => board.id === activeBoardId);
+  const activeIsVisible = initialVisibleBoards.some(
+    (board) => board.id === activeBoardId,
+  );
+  const visibleBoards =
+    activeBoard && !activeIsVisible && initialVisibleBoards.length > 0
+      ? [
+          ...initialVisibleBoards.slice(0, -1),
+          activeBoard,
+        ]
+      : initialVisibleBoards;
+  const visibleBoardsRef = useRef(visibleBoards);
+  visibleBoardsRef.current = visibleBoards;
+
+  const updateDragState = (next: DragState | null) => {
+    dragStateRef.current = next;
+    setDragState(next);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (dropTimeoutRef.current) {
+        window.clearTimeout(dropTimeoutRef.current);
+      }
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+      document.body.style.cursor = "";
+    };
+  }, []);
 
   // ── Context menu ─────────────────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -251,7 +388,11 @@ export function BoardTabBar() {
     event: PointerEvent<HTMLDivElement>,
     boardId: string,
   ) {
-    if (event.button !== 0 || renamingId) return;
+    if (event.button !== 0 || renamingId || dragStateRef.current?.isDropping) return;
+    if ((event.target as HTMLElement).closest("button, input")) return;
+    if (visibleBoardsRef.current.length <= 1) return;
+
+    suppressTabClickRef.current = false;
     tabPointerRef.current = {
       boardId,
       pointerId: event.pointerId,
@@ -266,63 +407,211 @@ export function BoardTabBar() {
     const pointer = tabPointerRef.current;
     if (!pointer || pointer.pointerId !== event.pointerId) return;
 
-    const movedDistance = Math.hypot(
-      event.clientX - pointer.startX,
-      event.clientY - pointer.startY,
-    );
-    if (!pointer.dragging && movedDistance >= 5) {
-      pointer.dragging = true;
-      setDraggingId(pointer.boardId);
-    }
-    if (!pointer.dragging) return;
+    const clientX = event.clientX;
+    const clientY = event.clientY;
 
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-tab]");
-    setDragOverId(target?.dataset.boardId ?? null);
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const currentPointer = tabPointerRef.current;
+      if (!currentPointer || currentPointer.pointerId !== event.pointerId) return;
+
+      const movedDistance = Math.hypot(
+        clientX - currentPointer.startX,
+        clientY - currentPointer.startY,
+      );
+
+      // Start drag if moved >= 4px threshold
+      if (!currentPointer.dragging) {
+        if (movedDistance < 4) return;
+        const currentVisible = visibleBoardsRef.current;
+        if (currentVisible.length <= 1) return;
+
+        const strip = stripRef.current;
+        if (!strip) return;
+
+        const geometries: TabGeometry[] = [];
+        for (const b of currentVisible) {
+          const el = strip.querySelector<HTMLElement>(
+            `[data-tab][data-board-id="${b.id}"]`,
+          );
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            geometries.push({
+              id: b.id,
+              left: rect.left,
+              width: rect.width,
+              center: rect.left + rect.width / 2,
+            });
+          }
+        }
+
+        if (geometries.length !== currentVisible.length) return;
+
+        const originIndex = geometries.findIndex((g) => g.id === currentPointer.boardId);
+        if (originIndex < 0) return;
+
+        currentPointer.dragging = true;
+        document.body.style.cursor = "grabbing";
+
+        const draggedWidth = geometries[originIndex].width;
+        const slotCenters = computeSlotCenters(originIndex, geometries);
+        const n = geometries.length;
+        const minDeltaX = geometries[0].left - geometries[originIndex].left - 8;
+        const maxDeltaX =
+          geometries[n - 1].left +
+          geometries[n - 1].width -
+          draggedWidth -
+          geometries[originIndex].left +
+          8;
+
+        const rawDeltaX = clientX - currentPointer.startX;
+        const deltaX = Math.max(minDeltaX, Math.min(maxDeltaX, rawDeltaX));
+        const currentCenter = geometries[originIndex].center + deltaX;
+        const targetIndex = getTargetIndex(currentCenter, slotCenters);
+
+        updateDragState({
+          boardId: currentPointer.boardId,
+          originIndex,
+          targetIndex,
+          deltaX,
+          draggedWidth,
+          tabGeometries: geometries,
+          slotCenters,
+          isDragging: true,
+          isDropping: false,
+          targetOffset: 0,
+        });
+        return;
+      }
+
+      // Update existing drag
+      const currentDrag = dragStateRef.current;
+      if (!currentDrag || currentDrag.isDropping) return;
+
+      const { tabGeometries, originIndex, draggedWidth, slotCenters } = currentDrag;
+      const n = tabGeometries.length;
+      const minDeltaX = tabGeometries[0].left - tabGeometries[originIndex].left - 8;
+      const maxDeltaX =
+        tabGeometries[n - 1].left +
+        tabGeometries[n - 1].width -
+        draggedWidth -
+        tabGeometries[originIndex].left +
+        8;
+
+      const rawDeltaX = clientX - currentPointer.startX;
+      const deltaX = Math.max(minDeltaX, Math.min(maxDeltaX, rawDeltaX));
+      const currentCenter = tabGeometries[originIndex].center + deltaX;
+      const targetIndex = getTargetIndex(currentCenter, slotCenters);
+
+      updateDragState({
+        ...currentDrag,
+        deltaX,
+        targetIndex,
+      });
+    });
   }
 
-  async function handleTabPointerUp(event: PointerEvent<HTMLDivElement>) {
+  function handleTabPointerUp(event: PointerEvent<HTMLDivElement>) {
     const pointer = tabPointerRef.current;
     if (!pointer || pointer.pointerId !== event.pointerId) return;
 
-    const wasDragging = pointer.dragging;
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-tab]");
-    const targetId = target?.dataset.boardId;
-    const targetRect = target?.getBoundingClientRect();
-    const insertBefore =
-      targetRect !== undefined &&
-      event.clientX < targetRect.left + targetRect.width / 2;
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
 
-    tabPointerRef.current = null;
-    setDraggingId(null);
-    setDragOverId(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (!wasDragging) return;
-    suppressTabClickRef.current = true;
-    if (!targetId || targetId === pointer.boardId) return;
 
-    const sourceIndex = boards.findIndex((board) => board.id === pointer.boardId);
-    const targetIndex = boards.findIndex((board) => board.id === targetId);
-    if (sourceIndex < 0 || targetIndex < 0) return;
+    document.body.style.cursor = "";
 
-    const nextOrder = boards.map((board) => board.id);
-    const [movedId] = nextOrder.splice(sourceIndex, 1);
-    let insertionIndex = nextOrder.indexOf(targetId);
-    if (!insertBefore) insertionIndex += 1;
-    nextOrder.splice(insertionIndex, 0, movedId);
-
-    try {
-      await reorderBoards(nextOrder);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to reorder boards.";
-      setRenameToast(message);
+    const activeDrag = dragStateRef.current;
+    if (!pointer.dragging || !activeDrag || activeDrag.isDropping) {
+      tabPointerRef.current = null;
+      updateDragState(null);
+      return;
     }
+
+    suppressTabClickRef.current = true;
+
+    const { originIndex, targetIndex, slotCenters } = activeDrag;
+    const targetOffset = computeTargetOffset(
+      originIndex,
+      targetIndex,
+      slotCenters,
+    );
+
+    updateDragState({
+      ...activeDrag,
+      isDropping: true,
+      targetOffset,
+    });
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = prefersReducedMotion ? 0 : 200;
+
+    dropTimeoutRef.current = window.setTimeout(() => {
+      dropTimeoutRef.current = null;
+      tabPointerRef.current = null;
+
+      if (targetIndex !== originIndex) {
+        const currentVisible = visibleBoardsRef.current;
+        const sourceBoard = currentVisible[originIndex];
+        const targetBoard = currentVisible[targetIndex];
+        if (sourceBoard && targetBoard) {
+          const nextOrder = boardsRef.current.map((b) => b.id);
+          const srcIdx = nextOrder.indexOf(sourceBoard.id);
+          if (srcIdx >= 0) {
+            nextOrder.splice(srcIdx, 1);
+            let insertIdx = nextOrder.indexOf(targetBoard.id);
+            if (targetIndex > originIndex) {
+              insertIdx += 1;
+            }
+            nextOrder.splice(insertIdx, 0, sourceBoard.id);
+
+            // Synchronously clear drag state at the same time as boards reorder
+            // so React batches both updates into a single atomic render with no transform overlap
+            updateDragState(null);
+            void reorderBoards(nextOrder).catch((err) => {
+              const message =
+                err instanceof Error ? err.message : "Unable to reorder boards.";
+              setRenameToast(message);
+            });
+            return;
+          }
+        }
+      }
+      updateDragState(null);
+    }, duration);
+  }
+
+  function handleTabPointerCancel(event: PointerEvent<HTMLDivElement>) {
+    const pointer = tabPointerRef.current;
+    if (
+      pointer &&
+      pointer.pointerId !== undefined &&
+      event.currentTarget.hasPointerCapture(pointer.pointerId)
+    ) {
+      event.currentTarget.releasePointerCapture(pointer.pointerId);
+    }
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    if (dropTimeoutRef.current) {
+      window.clearTimeout(dropTimeoutRef.current);
+      dropTimeoutRef.current = null;
+    }
+    document.body.style.cursor = "";
+    tabPointerRef.current = null;
+    updateDragState(null);
   }
 
   async function commitRename() {
@@ -429,21 +718,6 @@ export function BoardTabBar() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  // Keep the active board in the main strip. A board selected from the
-  // overflow menu may otherwise remain hidden while the first tab still
-  // appears to be selected.
-  const initialVisibleBoards = boards.slice(0, visibleCount);
-  const activeBoard = boards.find((board) => board.id === activeBoardId);
-  const activeIsVisible = initialVisibleBoards.some(
-    (board) => board.id === activeBoardId,
-  );
-  const visibleBoards =
-    activeBoard && !activeIsVisible && initialVisibleBoards.length > 0
-      ? [
-          ...initialVisibleBoards.slice(0, -1),
-          activeBoard,
-        ]
-      : initialVisibleBoards;
   const confirmTarget = boards.find((b) => b.id === confirmDeleteId);
 
   return (
@@ -476,7 +750,7 @@ export function BoardTabBar() {
             <div
               key={board.id}
               data-measure-tab
-              className="group relative flex items-center px-3 max-w-[120px] shrink-0 text-xs"
+              className="group relative flex items-center px-3 min-w-[72px] max-w-[130px] shrink-0 text-xs"
             >
               <span className="truncate">{board.title}</span>
               <span className="ml-1 shrink-0 p-0.5">
@@ -579,9 +853,37 @@ export function BoardTabBar() {
         {/* ── Visible tabs ──────────────────────────────────────────────── */}
         {/* Reordering is intentionally confined to this tab strip. A future
             tab tear-off/new-window interaction would be a separate feature. */}
-        {visibleBoards.map((board) => {
+        {visibleBoards.map((board, boardIndex) => {
           const isActive = board.id === activeBoardId;
           const isRenaming = board.id === renamingId;
+          const isThisDragging = dragState?.boardId === board.id;
+          const isAnyDragging = Boolean(dragState?.isDragging);
+          const isThisDropping = isThisDragging && dragState?.isDropping;
+
+          let transformStyle: string | undefined;
+          let transitionStyle: string | undefined;
+          let zIndexStyle: number | undefined;
+
+          if (isThisDragging && dragState) {
+            zIndexStyle = 30;
+            if (isThisDropping) {
+              transformStyle = `translate3d(${dragState.targetOffset}px, 0, 0) scale(1)`;
+              transitionStyle =
+                "transform 180ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms ease, opacity 180ms ease";
+            } else {
+              transformStyle = `translate3d(${dragState.deltaX}px, -2px, 0) scale(1.03)`;
+              transitionStyle = "none";
+            }
+          } else if (isAnyDragging && dragState) {
+            const shift = getTabShift(
+              boardIndex,
+              dragState.originIndex,
+              dragState.targetIndex,
+              dragState.draggedWidth,
+            );
+            transformStyle = `translate3d(${shift}px, 0, 0)`;
+            transitionStyle = "transform 180ms cubic-bezier(0.2, 0, 0, 1)";
+          }
 
           return (
             <div
@@ -591,7 +893,13 @@ export function BoardTabBar() {
               role="tab"
               aria-selected={isActive}
               tabIndex={0}
-              aria-grabbed={draggingId === board.id}
+              aria-grabbed={isThisDragging}
+              style={{
+                transform: transformStyle,
+                transition: transitionStyle,
+                zIndex: zIndexStyle,
+                willChange: isAnyDragging ? "transform" : undefined,
+              }}
               onClick={() => {
                 if (suppressTabClickRef.current) {
                   suppressTabClickRef.current = false;
@@ -603,6 +911,21 @@ export function BoardTabBar() {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   setActiveBoard(board.id);
+                } else if (
+                  (e.ctrlKey || e.altKey) &&
+                  (e.key === "ArrowLeft" || e.key === "ArrowRight")
+                ) {
+                  e.preventDefault();
+                  const currentIndex = boards.findIndex((b) => b.id === board.id);
+                  if (currentIndex < 0) return;
+                  const targetIdx =
+                    e.key === "ArrowLeft" ? currentIndex - 1 : currentIndex + 1;
+                  if (targetIdx >= 0 && targetIdx < boards.length) {
+                    const nextOrder = boards.map((b) => b.id);
+                    const [moved] = nextOrder.splice(currentIndex, 1);
+                    nextOrder.splice(targetIdx, 0, moved);
+                    void reorderBoards(nextOrder);
+                  }
                 }
               }}
               onDoubleClick={() => startRename(board)}
@@ -610,25 +933,25 @@ export function BoardTabBar() {
               onPointerDown={(e) => handleTabPointerDown(e, board.id)}
               onPointerMove={handleTabPointerMove}
               onPointerUp={(e) => void handleTabPointerUp(e)}
-              onPointerCancel={(e) => {
-                const pointer = tabPointerRef.current;
-                if (
-                  pointer &&
-                  pointer.pointerId !== undefined &&
-                  e.currentTarget.hasPointerCapture(pointer.pointerId)
-                ) {
-                  e.currentTarget.releasePointerCapture(pointer.pointerId);
-                }
-                tabPointerRef.current = null;
-                setDraggingId(null);
-                setDragOverId(null);
-              }}
-              title={board.ghost ? `${board.title} (not yet saved)` : board.title}
+              onPointerCancel={handleTabPointerCancel}
+              title={
+                isAnyDragging
+                  ? undefined
+                  : board.ghost
+                    ? `${board.title} (not yet saved)`
+                    : board.title
+              }
               className={`
-                group relative flex items-center rounded-t-md px-3 max-w-[120px] shrink-0
-                text-xs truncate transition-colors
-                ${draggingId === board.id ? "opacity-50" : ""}
-                ${dragOverId === board.id ? "ring-1 ring-inset ring-indigo-500" : ""}
+                group relative flex items-center rounded-t-md px-3 min-w-[72px] max-w-[130px] shrink-0
+                text-xs truncate select-none
+                ${
+                  isThisDragging
+                    ? isThisDropping
+                      ? "cursor-default shadow-lg shadow-black/50 ring-1 ring-indigo-500/60 bg-neutral-800 text-neutral-100"
+                      : "cursor-grabbing shadow-2xl shadow-black/80 ring-1 ring-indigo-500/80 bg-neutral-800 text-neutral-100"
+                    : "cursor-grab"
+                }
+                ${isAnyDragging && !isThisDragging ? "pointer-events-none" : ""}
                 ${
                   isActive
                     ? "text-neutral-100 bg-neutral-950 after:absolute after:bottom-0 after:inset-x-0 after:h-[2px] after:bg-indigo-500"
@@ -685,7 +1008,7 @@ export function BoardTabBar() {
                 className="
                   ml-1 shrink-0 rounded p-0.5 text-neutral-500 opacity-0
                   transition-opacity hover:bg-neutral-700 hover:text-neutral-100
-                  group-hover:opacity-100 focus:opacity-100
+                  group-hover:opacity-100 focus:opacity-100 cursor-pointer
                 "
               >
                 <FiX className="h-3 w-3" aria-hidden="true" />
