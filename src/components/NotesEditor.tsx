@@ -44,11 +44,11 @@ interface ToolbarItem {
   shortcut?: string;
   shortcutKey?: string;
   shortcutShift?: boolean;
-  action: (
+  action: "table" | ((
     textarea: HTMLTextAreaElement,
     value: string,
     onChange: (v: string) => void,
-  ) => void;
+  ) => void);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -59,6 +59,15 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [tableSize, setTableSize] = useState<{ rows: string; columns: string } | null>(null);
+  const [tableError, setTableError] = useState(false);
+  const tableSelectionRef = useRef({ start: 0, end: 0 });
+  const tableRowsRef = useRef<HTMLInputElement>(null);
+  const tableOpen = tableSize !== null;
+
+  useEffect(() => {
+    if (tableOpen) tableRowsRef.current?.focus();
+  }, [tableOpen]);
 
   const applyChange = useCallback(
     (nextValue: string) => {
@@ -74,6 +83,13 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
     (action: ToolbarItem["action"]) => {
       const ta = textareaRef.current;
       if (!ta) return;
+      if (action === "table") {
+        tableSelectionRef.current = { start: ta.selectionStart, end: ta.selectionEnd };
+        setTableSize({ rows: "2", columns: "3" });
+        setTableError(false);
+        return;
+      }
+      setTableSize(null);
       action(ta, value, applyChange);
       // Return focus to textarea so the user can keep typing
       ta.focus();
@@ -162,12 +178,13 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
         {TOOLBAR.map((item) => (
           <button
             key={item.title}
+            type="button"
             title={item.title}
             onMouseDown={(e) => {
               // Prevent textarea from losing focus
               e.preventDefault();
-              handleToolbar(item.action);
             }}
+            onClick={() => handleToolbar(item.action)}
             className="
               toolbar-inline
               px-1.5 py-0.5 rounded text-xs text-neutral-400
@@ -232,6 +249,69 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
       </div>
 
       {/* ── Textarea ─────────────────────────────────────────────────────── */}
+      {tableSize && (
+        <form
+          aria-label="Create table"
+          noValidate
+          className="flex flex-wrap items-center gap-2 px-2 py-1 border-b border-neutral-800 text-xs text-neutral-300 shrink-0 min-w-0"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const rows = Number(tableSize.rows);
+            const columns = Number(tableSize.columns);
+            if (![tableSize.rows, tableSize.columns].every((size) => /^\d+$/.test(size)) ||
+                ![rows, columns].every((size) => Number.isInteger(size) && size >= 1 && size <= 10)) {
+              setTableError(true);
+              return;
+            }
+            const ta = textareaRef.current;
+            if (!ta) return;
+            ta.setSelectionRange(tableSelectionRef.current.start, tableSelectionRef.current.end);
+            insertTable(ta, value, applyChange, rows, columns);
+            setTableSize(null);
+            ta.focus();
+          }}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setTableSize(null);
+              textareaRef.current?.focus();
+            }
+          }}
+        >
+          {(["rows", "columns"] as const).map((dimension) => (
+            <label key={dimension} className="flex items-center gap-1">
+              {dimension === "rows" ? "Rows" : "Columns"}
+              <input
+                ref={dimension === "rows" ? tableRowsRef : undefined}
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                value={tableSize[dimension]}
+                aria-invalid={tableError}
+                aria-describedby={tableError ? "table-size-error" : undefined}
+                onChange={(event) => {
+                  setTableSize({ ...tableSize, [dimension]: event.target.value });
+                  setTableError(false);
+                }}
+                className="w-12 min-w-0 rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5"
+              />
+            </label>
+          ))}
+          <button type="submit" className="rounded px-1 py-0.5 hover:bg-neutral-800">Insert</button>
+          <button type="button" onClick={() => {
+            setTableSize(null);
+            textareaRef.current?.focus();
+          }} className="rounded px-1 py-0.5 hover:bg-neutral-800">Cancel</button>
+          {tableError && (
+            <p id="table-size-error" role="alert" className="w-full text-red-400">
+              Rows and columns must be whole numbers from 1 to 10.
+            </p>
+          )}
+        </form>
+      )}
       <textarea
         ref={textareaRef}
         value={value}
@@ -318,7 +398,7 @@ const TOOLBAR: ToolbarItem[] = [
   {
     label: <FiGrid aria-hidden="true" />,
     title: "Table",
-    action: (ta, val, set) => insertTable(ta, val, set),
+    action: "table",
   },
   {
     label: <FiCode aria-hidden="true" />,
@@ -508,9 +588,17 @@ function insertTable(
   ta: HTMLTextAreaElement,
   value: string,
   onChange: (v: string) => void,
+  rows: number,
+  columns: number,
 ) {
   const { selectionStart: start, selectionEnd: end } = ta;
-  const table = "| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |";
+  const line = (cells: string[]) => `| ${cells.join(" | ")} |`;
+  const table = [
+    line(Array.from({ length: columns }, (_, i) => `Header ${i + 1}`)),
+    line(Array.from({ length: columns }, () => "---")),
+    ...Array.from({ length: rows - 1 }, () =>
+      line(Array.from({ length: columns }, (_, i) => `Cell ${i + 1}`))),
+  ].join("\n");
   onChange(value.slice(0, start) + table + value.slice(end));
   requestAnimationFrame(() => {
     ta.selectionStart = start;
