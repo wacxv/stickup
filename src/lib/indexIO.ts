@@ -46,6 +46,8 @@ export interface IndexFile {
   /** Board IDs closed from the tab strip, newest first. */
   closedBoardIds: string[];
   boards: BoardSummary[];
+  /** Board IDs ordered by most recent opening or activation. */
+  recentBoardIds?: string[];
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -72,6 +74,9 @@ export async function loadIndex(): Promise<{
         parsed.closedBoardIds = Array.isArray(parsed.closedBoardIds)
           ? parsed.closedBoardIds
           : [];
+        parsed.recentBoardIds = Array.isArray(parsed.recentBoardIds)
+          ? parsed.recentBoardIds.filter((id): id is string => typeof id === "string")
+          : undefined;
         // Index looks valid — trust it for the summary list but don't
         // return full Board objects from here (caller will load on demand).
         return { index: parsed, boards: [] };
@@ -130,6 +135,7 @@ export async function syncIndex(
   lastOpenBoardId: string | null,
   closedBoardIds: string[] = [],
   closedBoards: Board[] = [],
+  recentBoardIds: string[] = [],
 ): Promise<IndexFile> {
   const allBoards = [
     ...boards,
@@ -142,6 +148,7 @@ export async function syncIndex(
     lastOpenBoardId,
     closedBoardIds,
     boards: allBoards.map(toSummary),
+    recentBoardIds: recentBoardIds.filter((id) => allBoards.some((board) => board.id === id)),
   };
   await writeIndex(index);
   return index;
