@@ -100,8 +100,11 @@ export function SettingsPane({ onClose }: Props) {
     // Full overlay
     <div className="absolute inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
       {/* ── Header ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-800 shrink-0">
-        <h2 className="text-sm font-semibold">Settings</h2>
+      <div
+        data-tauri-drag-region
+        className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-800 shrink-0 select-none"
+      >
+        <h2 data-tauri-drag-region className="text-sm font-semibold">Settings</h2>
         <button
           onClick={onClose}
           aria-label="Close settings"
