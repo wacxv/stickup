@@ -56,6 +56,8 @@ interface ToolbarItem {
 export function NotesEditor({ value, onChange, placeholder }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number>();
   const undoStackRef = useRef<string[]>([]);
   const redoStackRef = useRef<string[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -142,6 +144,17 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
   useEffect(() => {
     if (!moreOpen) return;
 
+    function updateMenuHeight() {
+      const menu = overflowMenuRef.current;
+      if (!menu) return;
+      setMenuMaxHeight(Math.max(0, window.innerHeight - menu.getBoundingClientRect().top - 8));
+    }
+
+    updateMenuHeight();
+    const observer = new ResizeObserver(updateMenuHeight);
+    if (moreMenuRef.current) observer.observe(moreMenuRef.current);
+    window.addEventListener("resize", updateMenuHeight);
+
     function closeOnOutsideClick(event: MouseEvent) {
       if (!moreMenuRef.current?.contains(event.target as Node)) {
         setMoreOpen(false);
@@ -149,7 +162,11 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
     }
 
     document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      window.removeEventListener("resize", updateMenuHeight);
+      observer.disconnect();
+    };
   }, [moreOpen]);
 
   // Tab key inserts two spaces instead of moving focus
@@ -213,10 +230,12 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
           </button>
           {moreOpen && (
             <div
+              ref={overflowMenuRef}
               role="menu"
               aria-label="More formatting tools"
+              style={{ maxHeight: menuMaxHeight }}
               className="
-                toolbar-overflow-menu absolute top-full left-0 z-50 mt-1 min-w-[180px] max-w-[calc(100vw-1rem)] p-1
+                toolbar-overflow-menu absolute top-full left-0 z-50 mt-1 min-w-[180px] max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-1
                 bg-neutral-800 border border-neutral-700 rounded-md shadow-xl
               "
             >
@@ -231,7 +250,7 @@ export function NotesEditor({ value, onChange, placeholder }: Props) {
                     setMoreOpen(false);
                   }}
                   className="
-                    toolbar-overflow-item flex items-center gap-2 w-full px-2 py-1.5 rounded
+                    toolbar-overflow-item flex shrink-0 items-center gap-2 w-full px-2 py-1.5 rounded
                     text-left text-xs text-neutral-300
                     hover:bg-neutral-700 hover:text-neutral-100
                   "
