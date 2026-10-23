@@ -100,8 +100,11 @@ export function SettingsPane({ onClose }: Props) {
     // Full overlay
     <div className="absolute inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
       {/* ── Header ────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-800 shrink-0">
-        <h2 className="text-sm font-semibold">Settings</h2>
+      <div
+        data-tauri-drag-region
+        className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-800 shrink-0 select-none"
+      >
+        <h2 data-tauri-drag-region className="text-sm font-semibold">Settings</h2>
         <button
           onClick={onClose}
           aria-label="Close settings"
@@ -147,17 +150,17 @@ export function SettingsPane({ onClose }: Props) {
               { value: "nag", label: "Nag (repeat)" },
             ]}
           />
-          <NumberField
+          <DurationField
             label="Reminder lead time"
-            description="Minutes before due time to fire the first reminder"
+            description="Time before due time to fire the first reminder"
             value={draft.reminderLeadMinutes}
             min={1}
             max={1440}
             onChange={(v) => patch("reminderLeadMinutes", v)}
           />
-          <NumberField
+          <DurationField
             label="Nag interval"
-            description="Minutes between repeated nag notifications"
+            description="Time between repeated nag notifications"
             value={draft.nagIntervalMinutes}
             min={1}
             max={120}
@@ -332,7 +335,7 @@ function RadioGroup<T>({
   );
 }
 
-function NumberField({
+function DurationField({
   label,
   description,
   value,
@@ -347,6 +350,11 @@ function NumberField({
   max: number;
   onChange: (v: number) => void;
 }) {
+  const [unit, setUnit] = useState<"minutes" | "hours">(
+    value >= 60 && value % 60 === 0 ? "hours" : "minutes",
+  );
+  const divisor = unit === "hours" ? 60 : 1;
+
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex flex-col gap-0.5 min-w-0">
@@ -360,12 +368,14 @@ function NumberField({
       <div className="flex items-center gap-1.5 shrink-0">
         <input
           type="number"
-          value={value}
-          min={min}
-          max={max}
+          aria-label={label}
+          value={value / divisor}
+          min={min / divisor}
+          max={max / divisor}
+          step="any"
           onChange={(e) => {
-            const n = parseInt(e.target.value, 10);
-            if (!isNaN(n) && n >= min && n <= max) onChange(n);
+            const n = Math.round(e.target.valueAsNumber * divisor);
+            if (Number.isFinite(n) && n >= min && n <= max) onChange(n);
           }}
           className="
             w-14 bg-neutral-800 text-neutral-200 text-xs text-center
@@ -375,7 +385,15 @@ function NumberField({
             [&::-webkit-inner-spin-button]:appearance-none
           "
         />
-        <span className="text-[10px] text-neutral-600">min</span>
+        <select
+          aria-label={`${label} unit`}
+          value={unit}
+          onChange={(e) => setUnit(e.target.value as "minutes" | "hours")}
+          className="bg-neutral-800 text-neutral-200 text-xs rounded px-2 py-1 border border-neutral-700 focus:border-indigo-500 outline-none"
+        >
+          <option value="minutes">Minutes</option>
+          <option value="hours">Hours</option>
+        </select>
       </div>
     </div>
   );

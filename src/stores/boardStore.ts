@@ -33,7 +33,7 @@ import {
   saveTasks,
   writeBoard,
 } from "../lib/boardIO";
-import { loadIndex, syncIndex } from "../lib/indexIO";
+import { loadIndex, syncIndex as persistIndex } from "../lib/indexIO";
 
 // ─── State shape ──────────────────────────────────────────────────────────────
 
@@ -42,6 +42,8 @@ interface BoardState {
   boards: Board[];
   /** Saved boards closed from the tab strip, newest first. */
   recentlyClosed: Board[];
+  /** Board IDs ordered by most recent opening or activation. */
+  recentBoardIds: string[];
   /** ID of the currently visible board, or null before load */
   activeBoardId: string | null;
   /** True while the initial load is in progress */
@@ -99,6 +101,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────────────
   boards: [],
   recentlyClosed: [],
+  recentBoardIds: [],
   activeBoardId: null,
   loading: false,
   error: null,
@@ -126,7 +129,11 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
           ? lastOpen
           : boards[0]?.id) ?? null;
 
-      set({ boards, recentlyClosed, activeBoardId, loading: false });
+      set({
+        boards, recentlyClosed, activeBoardId, loading: false,
+        recentBoardIds: (index.recentBoardIds ?? index.closedBoardIds ?? [])
+          .filter((id) => allBoards.some((board) => board.id === id)),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[boardStore] loadBoards failed:", err);
@@ -136,6 +143,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   setActiveBoard(id) {
+    recordBoardOpening(id);
     set({ activeBoardId: id });
     // Persist the choice to index.json (fire-and-forget — not critical)
     const { boards } = get();
@@ -157,10 +165,11 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   // ── Board CRUD ─────────────────────────────────────────────────────────────
   async addBoard(title) {
     const { boards } = get();
-    const existingSlugs = boards.map((b) => b.slug);
+    const existingSlugs = [...boards, ...get().recentlyClosed].map((b) => b.slug);
     const nextOrder = boards.length; // append at end
     const board = await createBoard(title, existingSlugs, nextOrder);
     const next = [...boards, board];
+    recordBoardOpening(board.id);
     await syncIndex(
       next.filter((b) => !b.ghost),
       board.id,
@@ -283,6 +292,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     const board = recentlyClosed.find((candidate) => candidate.id === id);
     if (!board || boards.some((candidate) => candidate.id === id)) return;
 
+    recordBoardOpening(board.id);
     const next = [...boards, { ...board, order: boards.length }];
     const nextRecentlyClosed = recentlyClosed.filter(
       (candidate) => candidate.id !== id,
@@ -428,4 +438,33 @@ async function mutateBoard(
     console.error("[boardStore] mutation failed:", err);
     set({ error: msg });
   }
+}
+
+/** Reuse closed-board data without changing the tab dropdown's ordering. */
+export function selectRecentBoards(state: BoardStore): Board[] {
+  const saved = [...state.boards, ...state.recentlyClosed].filter((board) => !board.ghost);
+  const rank = new Map(state.recentBoardIds.map((id, index) => [id, index]));
+  return saved.sort((a, b) => {
+    const aRank = rank.get(a.id) ?? Infinity;
+    const bRank = rank.get(b.id) ?? Infinity;
+    if (aRank !== bRank) return aRank - bRank;
+    return b.updated.localeCompare(a.updated);
+  }).slice(0, 8);
+}
+
+function recordBoardOpening(id: string): void {
+  const { recentBoardIds } = useBoardStore.getState();
+  useBoardStore.setState({
+    recentBoardIds: [id, ...recentBoardIds.filter((candidate) => candidate !== id)],
+  });
+}
+
+function syncIndex(
+  boards: Board[],
+  activeBoardId: string | null,
+  closedBoardIds: string[] = [],
+  closedBoards: Board[] = [],
+) {
+  return persistIndex(boards, activeBoardId, closedBoardIds, closedBoards,
+    useBoardStore.getState().recentBoardIds);
 }
