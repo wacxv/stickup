@@ -34,6 +34,9 @@ import {
   writeBoard,
 } from "../lib/boardIO";
 import { loadIndex, syncIndex as persistIndex } from "../lib/indexIO";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { parseBoardFile } from "../lib/frontmatter";
+import { makeUniqueSlug, slugify } from "../lib/slugify";
 
 // ─── State shape ──────────────────────────────────────────────────────────────
 
@@ -56,6 +59,8 @@ interface BoardActions {
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   /** Load all boards from disk.  Call once on app start. */
   loadBoards(): Promise<void>;
+  importMarkdown(path: string): Promise<void>;
+  discoverBoards(): Promise<void>;
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   setActiveBoard(id: string): void;
@@ -163,6 +168,44 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   // ── Board CRUD ─────────────────────────────────────────────────────────────
+  async discoverBoards() {
+    if (get().loading) return;
+    const diskBoards = await listAllBoards();
+    const current = get();
+    const known = new Set([...current.boards, ...current.recentlyClosed].map((b) => b.id));
+    const added = diskBoards.filter((b) => !known.has(b.id));
+    if (!added.length) return;
+    set({ boards: [...current.boards, ...added], activeBoardId: current.activeBoardId ?? added[0].id });
+  },
+
+  async importMarkdown(path) {
+    const raw = await readTextFile(path);
+    const normalized = raw.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+    const filename = path.split(/[\\/]/).pop()!.replace(/\.md$/i, "");
+    const parsed = normalized.startsWith("---\n") ? parseBoardFile(normalized) : null;
+    const diskBoards = await listAllBoards();
+    const current = get();
+    const all = [...diskBoards, ...current.boards, ...current.recentlyClosed];
+    const title = parsed?.meta.title || filename || "Imported board";
+    const now = new Date().toISOString();
+    const board: Board = {
+      id: crypto.randomUUID(),
+      title,
+      slug: makeUniqueSlug(slugify(title), all.map((b) => b.slug)),
+      order: Math.max(-1, ...all.map((b) => b.order)) + 1,
+      created: parsed?.meta.created ?? now,
+      updated: now,
+      tasks: parsed?.meta.tasks ?? [],
+      notes: parsed?.notes ?? normalized,
+    };
+    await writeBoard(board);
+    set({ boards: [...get().boards.filter((b) => b.id !== board.id), board], activeBoardId: board.id });
+    recordBoardOpening(board.id);
+    const state = get();
+    await syncIndex(state.boards.filter((b) => !b.ghost), board.id,
+      state.recentlyClosed.map((b) => b.id), state.recentlyClosed);
+  },
+
   async addBoard(title) {
     const { boards } = get();
     const existingSlugs = [...boards, ...get().recentlyClosed].map((b) => b.slug);

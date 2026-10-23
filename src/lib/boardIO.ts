@@ -51,7 +51,7 @@ export async function readBoard(slug: string): Promise<Board | null> {
   try {
     const raw = await readTextFile(path);
     const { meta, notes } = parseBoardFile(raw);
-    return { ...meta, notes };
+    return { ...meta, slug, notes };
   } catch {
     return null;
   }

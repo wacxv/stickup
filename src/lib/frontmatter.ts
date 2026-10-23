@@ -44,7 +44,7 @@ export type BoardMeta = Omit<Board, "notes">;
  * Throws if the frontmatter is missing or malformed.
  */
 export function parseBoardFile(raw: string): ParsedFile {
-  const lines = raw.split("\n");
+  const lines = raw.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n");
 
   if (lines[0].trimEnd() !== FENCE) {
     throw new Error("Board file is missing opening frontmatter fence (---)");
