@@ -12,6 +12,7 @@
  */
 
 import { useState, useRef, useEffect, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import type { Task, Priority, Recurrence, NotificationMode } from "../types/task";
 import {
   formatDue,
@@ -65,6 +66,7 @@ export function TaskRow({
   );
 
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<HTMLDialogElement>(null);
 
   // Sync drafts when the task changes externally (e.g. after reorder)
   useEffect(() => {
@@ -89,8 +91,16 @@ export function TaskRow({
   // Focus title input when entering edit mode
   useEffect(() => {
     if (editing) {
+      const dialog = editorRef.current;
+      const previousFocus = document.activeElement;
+      dialog?.showModal();
       // Small delay to allow the panel to render
-      requestAnimationFrame(() => titleInputRef.current?.select());
+      const frame = requestAnimationFrame(() => titleInputRef.current?.select());
+      return () => {
+        cancelAnimationFrame(frame);
+        dialog?.close();
+        if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
+      };
     }
   }, [editing]);
 
@@ -149,7 +159,7 @@ export function TaskRow({
 
   // Shared input styling
   const fieldClass = `
-    bg-neutral-800 text-neutral-300 text-xs rounded px-2 py-1
+    min-w-0 w-full bg-neutral-800 text-neutral-300 text-xs rounded px-2 py-1
     border border-neutral-700 outline-none
     focus:border-indigo-500
     [color-scheme:dark]
@@ -275,8 +285,21 @@ export function TaskRow({
       </div>
 
       {/* ── Inline edit panel ────────────────────────────────────────── */}
-      {editing && editMode && (
-        <div className="px-3 pb-2 pt-1 bg-neutral-900/50 border-t border-neutral-800/40">
+      {editing && editMode && createPortal(
+        <dialog
+          ref={editorRef}
+          aria-label="Edit task"
+          onCancel={(event) => { event.preventDefault(); cancelEdit(); }}
+          className="m-auto p-0 w-[calc(100vw-1rem)] max-w-lg max-h-[calc(100dvh-1rem)] rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl backdrop:bg-black/60"
+        >
+          <div className="flex flex-col max-h-[calc(100dvh-1rem)]">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-neutral-800 shrink-0">
+            <h2 className="text-sm font-semibold">Edit task</h2>
+            <button onClick={cancelEdit} aria-label="Close task editor" className="p-1 text-neutral-400 hover:text-neutral-100">
+              <FiX aria-hidden="true" />
+            </button>
+          </div>
+          <div className="p-3 min-h-0 overflow-y-auto overscroll-contain">
           {/* Title */}
           <label className="flex flex-col gap-0.5 mb-2">
             <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Title</span>
@@ -289,7 +312,7 @@ export function TaskRow({
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-x-3 gap-y-2">
             {/* Due date */}
             <label className="flex flex-col gap-0.5">
               <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Due date</span>
@@ -367,8 +390,9 @@ export function TaskRow({
             </label>
           </div>
 
+          </div>
           {/* Action buttons */}
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="flex justify-end gap-2 px-3 py-2 border-t border-neutral-800 shrink-0">
             <button
               onClick={cancelEdit}
               className="
@@ -391,7 +415,9 @@ export function TaskRow({
               Save
             </button>
           </div>
-        </div>
+          </div>
+        </dialog>,
+        document.body,
       )}
 
       {/* ── Delete confirmation ────────────────────────────────────────── */}
